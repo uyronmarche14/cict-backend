@@ -1,0 +1,114 @@
+import { Router } from 'express';
+import * as newsController from '../controllers/news.controller';
+import { authenticate, optionalAuthenticate } from '../middleware/auth';
+import { authorize } from '../middleware/permissions';
+import { validate } from '../middleware/validate';
+import { logActivity } from '../middleware/activityLogger';
+import { handleImageUpload, upload } from '../middleware/upload';
+import { 
+  createNewsValidator, 
+  updateNewsValidator, 
+  newsIdValidator 
+} from '../validators/news.validator';
+import { Permission } from '../types';
+
+const router: Router = Router();
+
+/**
+ * @route   POST /api/news
+ * @desc    Create new news article
+ * @access  Private (requires CREATE_NEWS permission)
+ */
+router.post(
+  '/',
+  authenticate,
+  authorize(Permission.CREATE_NEWS),
+  upload.single('image'),
+  handleImageUpload,
+  validate(createNewsValidator),
+  logActivity('create', 'news'),
+  newsController.createNews
+);
+
+/**
+ * @route   GET /api/news
+ * @desc    Get all news articles
+ * @access  Public (Published only) or Private (All with filtering)
+ */
+router.get(
+  '/',
+  optionalAuthenticate,
+  newsController.getAllNews
+);
+
+/**
+ * @route   GET /api/news/:id
+ * @desc    Get single news article
+ * @access  Public (Published only) or Private (Any)
+ */
+router.get(
+  '/:id',
+  optionalAuthenticate,
+  validate(newsIdValidator),
+  newsController.getNewsById
+);
+
+/**
+ * @route   PUT /api/news/:id
+ * @desc    Update news article
+ * @access  Private (requires EDIT_NEWS permission)
+ */
+router.put(
+  '/:id',
+  authenticate,
+  authorize(Permission.EDIT_NEWS),
+  upload.single('image'),
+  handleImageUpload,
+  validate(updateNewsValidator),
+  logActivity('update', 'news'),
+  newsController.updateNews
+);
+
+/**
+ * @route   DELETE /api/news/:id
+ * @desc    Delete news article
+ * @access  Private (requires DELETE_NEWS permission)
+ */
+router.delete(
+  '/:id',
+  authenticate,
+  authorize(Permission.DELETE_NEWS),
+  validate(newsIdValidator),
+  logActivity('delete', 'news'),
+  newsController.deleteNews
+);
+
+/**
+ * @route   PATCH /api/news/:id/publish
+ * @desc    Publish news article
+ * @access  Private (requires PUBLISH_NEWS permission)
+ */
+router.patch(
+  '/:id/publish',
+  authenticate,
+  authorize(Permission.PUBLISH_NEWS),
+  validate(newsIdValidator),
+  logActivity('publish', 'news'),
+  newsController.publishNews
+);
+
+/**
+ * @route   PATCH /api/news/:id/archive
+ * @desc    Archive news article
+ * @access  Private (requires ARCHIVE_NEWS permission)
+ */
+router.patch(
+  '/:id/archive',
+  authenticate,
+  authorize(Permission.ARCHIVE_NEWS),
+  validate(newsIdValidator),
+  logActivity('archive', 'news'),
+  newsController.archiveNews
+);
+
+export default router;
