@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import * as eventController from '../controllers/event.controller';
 import { authenticate, optionalAuthenticate } from '../middleware/auth';
-import { authorize } from '../middleware/permissions';
+import { requireAdminAccess } from '../middleware/permissions';
 import { validate } from '../middleware/validate';
 import { logActivity } from '../middleware/activityLogger';
 import { handleImageUpload, upload } from '../middleware/upload';
@@ -10,7 +10,6 @@ import {
   updateEventValidator, 
   eventIdValidator 
 } from '../validators/event.validator';
-import { Permission } from '../types';
 
 const router: Router = Router();
 
@@ -22,7 +21,7 @@ const router: Router = Router();
 router.post(
   '/',
   authenticate,
-  authorize(Permission.CREATE_EVENT),
+  requireAdminAccess,
   upload.single('image'),
   handleImageUpload,
   validate(createEventValidator),
@@ -61,7 +60,7 @@ router.get(
 router.put(
   '/:id',
   authenticate,
-  authorize(Permission.EDIT_EVENT),
+  requireAdminAccess,
   upload.single('image'),
   handleImageUpload,
   validate(updateEventValidator),
@@ -77,10 +76,37 @@ router.put(
 router.delete(
   '/:id',
   authenticate,
-  authorize(Permission.DELETE_EVENT),
+  requireAdminAccess,
   validate(eventIdValidator),
   logActivity('delete', 'event'),
   eventController.deleteEvent
+);
+
+router.patch(
+  '/:id/publish',
+  authenticate,
+  requireAdminAccess,
+  validate(eventIdValidator),
+  logActivity('publish', 'event'),
+  eventController.publishEvent
+);
+
+router.patch(
+  '/:id/cancel',
+  authenticate,
+  requireAdminAccess,
+  validate(eventIdValidator),
+  logActivity('cancel', 'event'),
+  eventController.cancelEvent
+);
+
+router.patch(
+  '/:id/complete',
+  authenticate,
+  requireAdminAccess,
+  validate(eventIdValidator),
+  logActivity('complete', 'event'),
+  eventController.completeEvent
 );
 
 /**
@@ -92,7 +118,6 @@ router.post(
     '/:id/join',
     authenticate,
     validate(eventIdValidator),
-    logActivity('join', 'event'),
     eventController.joinEvent
 );
 
@@ -105,7 +130,6 @@ router.post(
     '/:id/leave',
     authenticate,
     validate(eventIdValidator),
-    logActivity('leave', 'event'),
     eventController.leaveEvent
 );
 

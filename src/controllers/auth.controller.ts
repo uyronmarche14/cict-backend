@@ -5,6 +5,8 @@ import { IJWTPayload } from '../types';
 import { AppError } from '../middleware/errorHandler';
 import logger from '../utils/logger';
 import { AuthRequest } from '../middleware/auth';
+import { buildAuthenticatedUser, serializeAuthUser } from '../utils/rbac';
+import { getPermissionMetadata as getPermissionMetadataCatalog } from '../utils/permissionMetadata';
 
 /**
  * Generate JWT token
@@ -28,47 +30,13 @@ const generateToken = (payload: IJWTPayload): string => {
   return jwt.sign(plainPayload, jwtSecret as jwt.Secret, { expiresIn: jwtExpire } as jwt.SignOptions);
 };
 
-/**
- * Register new user (admin only)
- */
-export const register = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { email, password, firstName, lastName, role } = req.body;
-    
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      throw new AppError('User with this email already exists', 409);
-    }
-    
-    // Create new user
-    const user = await User.create({
-      email,
-      password,
-      firstName,
-      lastName,
-      role,
-    });
-    
-    logger.info(`New user registered: ${user.email}`);
-    
-    res.status(201).json({
-      success: true,
-      message: 'User registered successfully',
-      data: {
-        user: {
-          id: user._id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-        },
-      },
-    });
-  } catch (error) {
-    throw error;
-  }
-};
+const getCookieOptions = () => ({
+  httpOnly: true,
+  sameSite: 'lax' as const,
+  secure: process.env.NODE_ENV === 'production',
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: '/',
+});
 
 /**
  * Login user
@@ -109,6 +77,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     };
     
     const token = generateToken(tokenPayload);
+    const authenticatedUser = await buildAuthenticatedUser(user, tokenPayload);
+    const serializedUser = await serializeAuthUser(authenticatedUser);
+
+    res.cookie('token', token, getCookieOptions());
     
     logger.info(`User logged in: ${user.email}`);
     
@@ -116,20 +88,33 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       success: true,
       message: 'Login successful',
       data: {
-        token,
-        user: {
-          id: user._id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-          customRole: user.customRole,
-        },
+        user: serializedUser,
+        permissions: authenticatedUser.permissions,
+        canAccessAdmin: authenticatedUser.canAccessAdmin,
+        adminScopes: authenticatedUser.adminScopes,
+        visibleAdminModules: authenticatedUser.visibleAdminModules,
+        scopedAdminModulesByOrganization:
+          authenticatedUser.scopedAdminModulesByOrganization,
       },
     });
   } catch (error) {
     throw error;
   }
+};
+
+/**
+ * Logout user
+ */
+export const logout = async (_req: Request, res: Response): Promise<void> => {
+  res.clearCookie('token', {
+    ...getCookieOptions(),
+    maxAge: undefined,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Logout successful',
+  });
 };
 
 /**
@@ -140,20 +125,31 @@ export const getProfile = async (req: AuthRequest, res: Response): Promise<void>
     if (!req.user) {
       throw new AppError('User not authenticated', 401);
     }
-    
-    const user = await User.findById(req.user.userId);
-    
-    if (!user) {
-      throw new AppError('User not found', 404);
-    }
+    const serializedUser = await serializeAuthUser(req.user);
     
     res.status(200).json({
       success: true,
-      data: { user },
+      data: {
+        user: serializedUser,
+        permissions: req.user.permissions,
+        canAccessAdmin: req.user.canAccessAdmin,
+        adminScopes: req.user.adminScopes,
+        visibleAdminModules: req.user.visibleAdminModules,
+        scopedAdminModulesByOrganization: req.user.scopedAdminModulesByOrganization,
+      },
     });
   } catch (error) {
     throw error;
   }
+};
+
+export const getPermissionMetadata = async (_req: Request, res: Response): Promise<void> => {
+  res.status(200).json({
+    success: true,
+    data: {
+      permissions: getPermissionMetadataCatalog(),
+    },
+  });
 };
 
 /**

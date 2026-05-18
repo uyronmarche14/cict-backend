@@ -1,8 +1,8 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from './auth';
-import { Permission, UserRole } from '../types';
-import Role from '../models/Role';
+import { Permission } from '../types';
 import logger from '../utils/logger';
+import { canAccessAdminPanel, hasGlobalPermission } from '../utils/rbac';
 
 /**
  * Middleware to check if user has required permissions
@@ -22,29 +22,11 @@ export const authorize = (...requiredPermissions: Permission[]) => {
         return;
       }
       
-      const { role, customRole } = req.user;
-      
-      // Full admin has all permissions
-      if (role === UserRole.FULL_ADMIN) {
-        return next();
-      }
-      
-      let userPermissions: Permission[] = [];
-      
-      // Get permissions from custom role if exists
-      if (customRole) {
-        const roleDoc = await Role.findById(customRole);
-        if (roleDoc) {
-          userPermissions = roleDoc.permissions;
-        }
-      } else {
-        // Get default permissions based on system role
-        userPermissions = getDefaultPermissions(role);
-      }
+      const { permissions: userPermissions } = req.user;
       
       // Check if user has all required permissions
-      const hasPermission = requiredPermissions.every(permission =>
-        userPermissions.includes(permission)
+      const hasPermission = requiredPermissions.every((permission) =>
+        hasGlobalPermission(req.user!, permission)
       );
       
       if (!hasPermission) {
@@ -71,42 +53,58 @@ export const authorize = (...requiredPermissions: Permission[]) => {
   };
 };
 
-/**
- * Get default permissions for system roles
- */
-const getDefaultPermissions = (role: UserRole): Permission[] => {
-  switch (role) {
-    case UserRole.FULL_ADMIN:
-      return Object.values(Permission);
-      
-    case UserRole.SEMI_ADMIN:
-      return [
-        Permission.CREATE_NEWS,
-        Permission.EDIT_NEWS,
-        Permission.PUBLISH_NEWS,
-        Permission.VIEW_NEWS,
-        Permission.CREATE_ANNOUNCEMENT,
-        Permission.EDIT_ANNOUNCEMENT,
-        Permission.PUBLISH_ANNOUNCEMENT,
-        Permission.VIEW_ANNOUNCEMENT,
-        Permission.VIEW_MEMBER,
-        Permission.EDIT_MEMBER,
-      ];
-      
-    case UserRole.SUPPORT:
-      return [
-        Permission.VIEW_NEWS,
-        Permission.VIEW_ANNOUNCEMENT,
-        Permission.VIEW_MEMBER,
-      ];
-      
-    default:
-      return [];
-  }
+export const authorizeAny = (...allowedPermissions: Permission[]) => {
+  return async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({
+          success: false,
+          message: 'Authentication required',
+        });
+        return;
+      }
+
+      const { permissions: userPermissions } = req.user;
+
+      const hasPermission = allowedPermissions.some((permission) =>
+        hasGlobalPermission(req.user!, permission)
+      );
+
+      if (!hasPermission) {
+        logger.warn(`User ${req.user.userId} attempted unauthorized action`, {
+          allowedPermissions,
+          userPermissions,
+        });
+
+        res.status(403).json({
+          success: false,
+          message: 'You do not have permission to perform this action',
+        });
+        return;
+      }
+
+      next();
+    } catch (error) {
+      logger.error('Authorization error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Authorization check failed',
+      });
+    }
+  };
 };
 
 /**
- * Middleware to check if user is admin (full or semi)
+ * Get default permissions for system roles
+ */
+export { getDefaultPermissions } from '../utils/rbac';
+
+/**
+ * Middleware to check if user can access admin features
  */
 export const isAdmin = async (
   req: AuthRequest,
@@ -121,14 +119,36 @@ export const isAdmin = async (
     return;
   }
   
-  const { role } = req.user;
-  
-  if (role === UserRole.FULL_ADMIN || role === UserRole.SEMI_ADMIN) {
+  if (req.user.canAccessAdmin) {
     return next();
   }
   
   res.status(403).json({
     success: false,
     message: 'Admin access required',
+  });
+};
+
+export const requireAdminAccess = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({
+      success: false,
+      message: 'Authentication required',
+    });
+    return;
+  }
+
+  if (req.user.canAccessAdmin || canAccessAdminPanel(req.user.permissions, req.user.organizationAssignments)) {
+    next();
+    return;
+  }
+
+  res.status(403).json({
+    success: false,
+    message: 'You do not have access to the admin panel',
   });
 };

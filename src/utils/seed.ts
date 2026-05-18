@@ -1,18 +1,23 @@
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
+import '../config/loadEnv';
 import User from '../models/User';
 import Role from '../models/Role';
 import News from '../models/News';
 import Announcement from '../models/Announcement';
+import Organization from '../models/Organization';
 import { UserRole, Permission, NewsStatus, AnnouncementPriority, AnnouncementType } from '../types';
 import logger from '../utils/logger';
-
-dotenv.config();
+import { validateEnv } from '../config/validateEnv';
 
 const seedDatabase = async () => {
   try {
+    validateEnv();
+
     // Connect to MongoDB
-    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/cict-crm';
+    const mongoURI = process.env.MONGODB_URI;
+    if (!mongoURI) {
+      throw new Error('MONGODB_URI is required');
+    }
     await mongoose.connect(mongoURI);
     logger.info('Connected to MongoDB');
 
@@ -58,6 +63,16 @@ const seedDatabase = async () => {
           Permission.PUBLISH_ANNOUNCEMENT,
           Permission.ARCHIVE_ANNOUNCEMENT,
           Permission.VIEW_ANNOUNCEMENT,
+          Permission.VIEW_EVENT,
+          Permission.CREATE_EVENT,
+          Permission.EDIT_EVENT,
+          Permission.PUBLISH_EVENT,
+          Permission.CANCEL_EVENT,
+          Permission.COMPLETE_EVENT,
+          Permission.VIEW_ORGANIZATION,
+          Permission.CREATE_ORGANIZATION,
+          Permission.EDIT_ORGANIZATION,
+          Permission.VIEW_ROLE,
         ],
         isSystemRole: true,
       },
@@ -67,9 +82,12 @@ const seedDatabase = async () => {
         permissions: [
           Permission.CREATE_MEMBER,
           Permission.EDIT_MEMBER,
+          Permission.DELETE_MEMBER,
           Permission.VIEW_MEMBER,
           Permission.VIEW_NEWS,
           Permission.VIEW_ANNOUNCEMENT,
+          Permission.VIEW_EVENT,
+          Permission.VIEW_ORGANIZATION,
         ],
         isSystemRole: true,
       },
@@ -80,6 +98,8 @@ const seedDatabase = async () => {
           Permission.VIEW_NEWS,
           Permission.VIEW_ANNOUNCEMENT,
           Permission.VIEW_MEMBER,
+          Permission.VIEW_EVENT,
+          Permission.VIEW_ORGANIZATION,
         ],
         isSystemRole: true,
       },
@@ -112,7 +132,12 @@ const seedDatabase = async () => {
           title: 'CICT Hosts Annual Hackathon 2024',
           excerpt: 'Over 200 students participated in the biggest coding competition of the year.',
           content: 'The College of Information and Communication Technology successfully hosted its Annual Hackathon 2024...',
+          bodyHtml: '<p>The College of Information and Communication Technology successfully hosted its Annual Hackathon 2024...</p>',
           imageUrl: 'https://res.cloudinary.com/ddnxfpziq/image/upload/v1755790148/529718384_122100992648966778_7029427848362639164_n_geskab.jpg',
+          coverImage: {
+            imageUrl: 'https://res.cloudinary.com/ddnxfpziq/image/upload/v1755790148/529718384_122100992648966778_7029427848362639164_n_geskab.jpg',
+            alt: 'CICT Hackathon 2024',
+          },
           status: NewsStatus.PUBLISHED,
           author: admin._id,
           tags: ['Hackathon', 'Innovation', 'Competition'],
@@ -122,7 +147,12 @@ const seedDatabase = async () => {
           title: 'CICT Faculty Receives National Research Excellence Award',
           excerpt: 'Professor John Doe recognized for groundbreaking work in AI.',
           content: 'Professor John Doe from the Computer Science department has been awarded...',
+          bodyHtml: '<p>Professor John Doe from the Computer Science department has been awarded...</p>',
           imageUrl: 'https://res.cloudinary.com/ddnxfpziq/image/upload/v1756660320/cict4_qqksfh.jpg',
+          coverImage: {
+            imageUrl: 'https://res.cloudinary.com/ddnxfpziq/image/upload/v1756660320/cict4_qqksfh.jpg',
+            alt: 'Research excellence award',
+          },
           status: NewsStatus.PUBLISHED,
           author: admin._id,
           tags: ['Research', 'Award', 'AI'],
@@ -140,6 +170,7 @@ const seedDatabase = async () => {
         {
           title: 'Midterm Examination Schedule',
           content: 'The midterm examinations for the Second Semester AY 2023-2024 will be held from April 15-19, 2024.',
+          bodyHtml: '<p>The midterm examinations for the Second Semester AY 2023-2024 will be held from April 15-19, 2024.</p>',
           priority: AnnouncementPriority.HIGH,
           type: AnnouncementType.ACADEMIC,
           status: NewsStatus.PUBLISHED,
@@ -152,6 +183,7 @@ const seedDatabase = async () => {
         {
           title: 'System Maintenance Notice',
           content: 'The student portal will be undergoing scheduled maintenance on Saturday, March 23, from 10:00 PM to 2:00 AM.',
+          bodyHtml: '<p>The student portal will be undergoing scheduled maintenance on Saturday, March 23, from 10:00 PM to 2:00 AM.</p>',
           priority: AnnouncementPriority.MEDIUM,
           type: AnnouncementType.GENERAL,
           status: NewsStatus.PUBLISHED,
@@ -165,6 +197,125 @@ const seedDatabase = async () => {
 
       await Announcement.insertMany(announcementData);
       logger.info('✅ Announcements seeded');
+    }
+
+    // Create Organizations
+    const orgCount = await Organization.countDocuments();
+    if (orgCount === 0) {
+      const orgData = [
+        {
+          id: 'ict-sf',
+          name: 'ICT-SF',
+          fullName: 'ICT Student Forum',
+          description: 'The premier student organization for all ICT students.',
+          longDescription: 'The ICT Student Forum serves as the umbrella organization for the College of ICT, representing the student body and organizing college-wide events.',
+          logo: 'https://res.cloudinary.com/ddnxfpziq/image/upload/v1756660320/cict4_qqksfh.jpg', // Placeholder
+          banner: 'https://res.cloudinary.com/ddnxfpziq/image/upload/v1755790148/529718384_122100992648966778_7029427848362639164_n_geskab.jpg',
+          established: '2010',
+          mission: 'To empower ICT students through holistic development and representation.',
+          vision: 'To be the leading student organization fostering innovation and leadership.',
+          values: ['Leadership', 'Service', 'Excellence'],
+          achievements: ['Best Student Council 2023'],
+          members: [
+            {
+              id: '1',
+              name: 'John Doe',
+              position: 'President',
+              photo: 'https://res.cloudinary.com/ddnxfpziq/image/upload/v1756660320/cict4_qqksfh.jpg',
+              bio: 'A passionate leader dedicated to serving the student body.',
+              joinedDate: '2022',
+            }
+          ],
+          color: {
+            primary: '#6e29f6',
+            secondary: '#f629a8',
+            accent: '#29f6d2',
+          },
+        },
+        {
+          id: 'css',
+          name: 'CSS',
+          fullName: 'Computer Science Society',
+          description: 'The academic organization for Computer Science students.',
+          longDescription: 'CSS promotes academic excellence and technological advancement in the field of Computer Science.',
+          logo: 'https://res.cloudinary.com/ddnxfpziq/image/upload/v1756660320/cict4_qqksfh.jpg',
+          banner: 'https://res.cloudinary.com/ddnxfpziq/image/upload/v1755790148/529718384_122100992648966778_7029427848362639164_n_geskab.jpg',
+          established: '2012',
+          mission: 'To advance computer science education and practice.',
+          vision: 'A community of world-class computer scientists.',
+          values: ['Innovation', 'Logic', 'Creativity'],
+          achievements: ['National Coding Champions 2024'],
+          members: [],
+          color: {
+            primary: '#2563eb',
+            secondary: '#60a5fa',
+            accent: '#fbbf24',
+          },
+        },
+        {
+          id: 'iss',
+          name: 'ISS',
+          fullName: 'Information Systems Society',
+          description: 'Bridging technology and business.',
+          longDescription: 'ISS focuses on the strategic application of technology in business environments.',
+          logo: 'https://res.cloudinary.com/ddnxfpziq/image/upload/v1756660320/cict4_qqksfh.jpg',
+          banner: 'https://res.cloudinary.com/ddnxfpziq/image/upload/v1755790148/529718384_122100992648966778_7029427848362639164_n_geskab.jpg',
+          established: '2013',
+          mission: 'To develop business-savvy technology professionals.',
+          vision: 'Leaders in information systems management.',
+          values: ['Integrity', 'Strategy', 'Synergy'],
+          achievements: [],
+          members: [],
+          color: {
+            primary: '#059669',
+            secondary: '#34d399',
+            accent: '#fcd34d',
+          },
+        },
+        {
+          id: 'best',
+          name: 'BEST',
+          fullName: 'Board of European Students of Technology',
+          description: 'Connecting students across Europe (and beyond).',
+          longDescription: 'BEST provides complementary education and international opportunities.',
+          logo: 'https://res.cloudinary.com/ddnxfpziq/image/upload/v1756660320/cict4_qqksfh.jpg',
+          banner: 'https://res.cloudinary.com/ddnxfpziq/image/upload/v1755790148/529718384_122100992648966778_7029427848362639164_n_geskab.jpg',
+          established: '2015',
+          mission: 'Developing students through international cooperation.',
+          vision: 'Empowered diversity.',
+          values: ['Fun', 'Friendship', 'Improvement'],
+          achievements: [],
+          members: [],
+          color: {
+            primary: '#7c3aed',
+            secondary: '#a78bfa',
+            accent: '#c4b5fd',
+          },
+        },
+         {
+          id: 'robotcu',
+          name: 'RobotCU',
+          fullName: 'Robotics Club University',
+          description: 'Innovating the future through robotics.',
+          longDescription: 'RobotCU is dedicated to the field of robotics and automation.',
+          logo: 'https://res.cloudinary.com/ddnxfpziq/image/upload/v1756660320/cict4_qqksfh.jpg',
+          banner: 'https://res.cloudinary.com/ddnxfpziq/image/upload/v1755790148/529718384_122100992648966778_7029427848362639164_n_geskab.jpg',
+          established: '2016',
+          mission: 'To build the future, one robot at a time.',
+          vision: 'Pioneering robotics innovation.',
+          values: ['Innovation', 'Precision', 'Teamwork'],
+          achievements: ['RoboCup 2023 Finalists'],
+          members: [],
+          color: {
+            primary: '#dc2626',
+            secondary: '#ef4444',
+            accent: '#fee2e2',
+          },
+        },
+      ];
+
+      await Organization.insertMany(orgData);
+      logger.info('✅ Organizations seeded');
     }
 
     logger.info('🎉 Database seeding completed successfully!');

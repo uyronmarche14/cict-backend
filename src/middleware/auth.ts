@@ -1,12 +1,41 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { IJWTPayload } from '../types';
+import User from '../models/User';
+import { IAuthenticatedUser, IJWTPayload } from '../types';
 import logger from '../utils/logger';
+import { buildAuthenticatedUser } from '../utils/rbac';
 
 // Extend Express Request type
 export interface AuthRequest extends Request {
-  user?: IJWTPayload;
+  user?: IAuthenticatedUser;
 }
+
+const readTokenFromCookies = (cookieHeader?: string): string | null => {
+  if (!cookieHeader) {
+    return null;
+  }
+
+  const tokenCookie = cookieHeader
+    .split(';')
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith('token='));
+
+  if (!tokenCookie) {
+    return null;
+  }
+
+  const [, rawToken = ''] = tokenCookie.split('=');
+  return decodeURIComponent(rawToken);
+};
+
+const getTokenFromRequest = (req: Request): string | null => {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  }
+
+  return readTokenFromCookies(req.headers.cookie);
+};
 
 /**
  * Middleware to verify JWT token and attach user to request
@@ -17,19 +46,16 @@ export const authenticate = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // Get token from header
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const token = getTokenFromRequest(req);
+
+    if (!token) {
       res.status(401).json({
         success: false,
         message: 'No token provided. Authorization denied.',
       });
       return;
     }
-    
-    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-    
+
     // Verify token
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) {
@@ -42,9 +68,33 @@ export const authenticate = async (
     }
     
     const decoded = jwt.verify(token, jwtSecret) as IJWTPayload;
-    
-    // Attach user to request
-    req.user = decoded;
+    const user = await User.findById(decoded.userId);
+
+    if (!user) {
+      res.status(401).json({
+        success: false,
+        message: 'User no longer exists',
+      });
+      return;
+    }
+
+    if (!user.isActive) {
+      res.status(403).json({
+        success: false,
+        message: 'Your account has been deactivated',
+      });
+      return;
+    }
+
+    try {
+      req.user = await buildAuthenticatedUser(user, decoded);
+    } catch (roleError) {
+      res.status(403).json({
+        success: false,
+        message: 'Your assigned role is no longer valid',
+      });
+      return;
+    }
     
     next();
   } catch (error: any) {
@@ -86,16 +136,23 @@ export const optionalAuthenticate = async (
   void res;
   
   try {
-    const authHeader = req.headers.authorization;
+    const token = getTokenFromRequest(req);
     
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
+    if (token) {
       const jwtSecret = process.env.JWT_SECRET;
       
       if (jwtSecret) {
         try {
           const decoded = jwt.verify(token, jwtSecret) as IJWTPayload;
-          req.user = decoded;
+          const user = await User.findById(decoded.userId);
+
+          if (user?.isActive) {
+            try {
+              req.user = await buildAuthenticatedUser(user, decoded);
+            } catch (_roleError) {
+              req.user = undefined;
+            }
+          }
         } catch (err) {
           // Token invalid or expired, proceed as unauthenticated
         }

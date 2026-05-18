@@ -1,64 +1,55 @@
 import { body, param } from 'express-validator';
-import { ContentOwnerType } from '../types';
+import { AnnouncementPriority, AnnouncementType, ContentOwnerType } from '../types';
 
-export const createEventValidator = [
+export const createAnnouncementValidator = [
   body('title')
     .trim()
     .notEmpty()
     .withMessage('Title is required')
-    .isLength({ max: 100 })
-    .withMessage('Title cannot exceed 100 characters'),
-  
+    .isLength({ max: 200 })
+    .withMessage('Title cannot exceed 200 characters'),
+
   body('bodyHtml')
     .optional()
     .trim(),
 
-  body('description')
+  body('content')
     .optional()
     .trim(),
 
   body()
     .custom((value) => {
       const bodyHtml = typeof value.bodyHtml === 'string' ? value.bodyHtml.trim() : '';
-      const description = typeof value.description === 'string' ? value.description.trim() : '';
+      const content = typeof value.content === 'string' ? value.content.trim() : '';
 
-      if (!bodyHtml && !description) {
-        throw new Error('Description is required');
+      if (!bodyHtml && !content) {
+        throw new Error('Body content is required');
       }
 
       return true;
     }),
-  
-  body('excerpt')
-    .trim()
-    .notEmpty()
-    .withMessage('Excerpt is required')
-    .isLength({ max: 200 })
-    .withMessage('Excerpt cannot exceed 200 characters'),
 
-  body('startDate')
-    .notEmpty()
-    .withMessage('Start date is required')
-    .isISO8601()
-    .withMessage('Start date must be a valid date'),
+  body('priority')
+    .optional()
+    .isIn(Object.values(AnnouncementPriority))
+    .withMessage('Invalid priority'),
 
-  body('endDate')
-    .notEmpty()
-    .withMessage('End date is required')
-    .isISO8601()
-    .withMessage('End date must be a valid date'),
+  body('type')
+    .optional()
+    .isIn(Object.values(AnnouncementType))
+    .withMessage('Invalid type'),
 
-  body('location')
-    .trim()
-    .notEmpty()
-    .withMessage('Location is required'),
-  
-  body('tags')
+  body('targetAudience')
     .optional()
     .toArray()
     .isArray()
-    .withMessage('Tags must be an array'),
-  
+    .withMessage('targetAudience must be an array'),
+
+  body('expiresAt')
+    .optional({ checkFalsy: true })
+    .isISO8601()
+    .withMessage('expiresAt must be a valid ISO date'),
+
   body('imageUrl')
     .optional({ checkFalsy: true })
     .isURL()
@@ -78,11 +69,6 @@ export const createEventValidator = [
     .optional()
     .isArray()
     .withMessage('Sections must be an array'),
-
-  body('schedule')
-    .optional()
-    .isArray()
-    .withMessage('Schedule must be an array'),
 
   body('ownerType')
     .optional()
@@ -113,57 +99,57 @@ export const createEventValidator = [
 
       return true;
     }),
-  
+
   body('status')
     .not()
     .exists()
-    .withMessage('Use the event workflow endpoints to change status'),
-
-  body('maxAttendees')
-    .optional()
-    .isInt({ min: 0 })
-    .withMessage('Max attendees must be a positive integer'),
+    .withMessage('Use the publish/archive workflow endpoints to change status'),
 ];
 
-export const updateEventValidator = [
+export const updateAnnouncementValidator = [
   param('id')
     .isMongoId()
-    .withMessage('Invalid event ID'),
-  
+    .withMessage('Invalid announcement ID'),
+
   body('title')
     .optional()
     .trim()
-    .isLength({ max: 100 })
-    .withMessage('Title cannot exceed 100 characters'),
-  
+    .isLength({ max: 200 })
+    .withMessage('Title cannot exceed 200 characters'),
+
   body('bodyHtml')
     .optional()
     .trim()
     .notEmpty()
     .withMessage('Body content cannot be empty'),
 
-  body('description')
+  body('content')
     .optional()
     .trim()
     .notEmpty()
-    .withMessage('Description cannot be empty'),
+    .withMessage('Content cannot be empty'),
 
-    body('startDate')
+  body('priority')
     .optional()
-    .isISO8601()
-    .withMessage('Start date must be a valid date'),
+    .isIn(Object.values(AnnouncementPriority))
+    .withMessage('Invalid priority'),
 
-  body('endDate')
+  body('type')
     .optional()
-    .isISO8601()
-    .withMessage('End date must be a valid date'),
-  
-  body('tags')
+    .isIn(Object.values(AnnouncementType))
+    .withMessage('Invalid type'),
+
+  body('targetAudience')
     .optional()
     .toArray()
     .isArray()
-    .withMessage('Tags must be an array'),
-  
+    .withMessage('targetAudience must be an array'),
+
+  body('expiresAt')
+    .optional({ checkFalsy: true })
+    .isISO8601()
+    .withMessage('expiresAt must be a valid ISO date'),
+
   body('imageUrl')
     .optional({ checkFalsy: true })
     .isURL()
@@ -184,11 +170,6 @@ export const updateEventValidator = [
     .isArray()
     .withMessage('Sections must be an array'),
 
-  body('schedule')
-    .optional()
-    .isArray()
-    .withMessage('Schedule must be an array'),
-
   body('ownerType')
     .optional()
     .isIn(Object.values(ContentOwnerType))
@@ -198,35 +179,30 @@ export const updateEventValidator = [
     .optional({ nullable: true })
     .custom((value) => value === null || typeof value === 'string')
     .withMessage('organizationId must be a string or null'),
-  
+
   body('status')
     .not()
     .exists()
-    .withMessage('Use the event workflow endpoints to change status'),
+    .withMessage('Use the publish/archive workflow endpoints to change status'),
 
   body('publishedAt')
     .not()
     .exists()
     .withMessage('publishedAt is managed by workflow endpoints'),
 
-  body('cancelledAt')
+  body('archivedAt')
     .not()
     .exists()
-    .withMessage('cancelledAt is managed by workflow endpoints'),
+    .withMessage('archivedAt is managed by workflow endpoints'),
 
-  body('completedAt')
+  body('isActive')
     .not()
     .exists()
-    .withMessage('completedAt is managed by workflow endpoints'),
-
-    body('maxAttendees')
-    .optional()
-    .isInt({ min: 0 })
-    .withMessage('Max attendees must be a positive integer'),
+    .withMessage('isActive is managed by workflow endpoints'),
 ];
 
-export const eventIdValidator = [
+export const announcementIdValidator = [
   param('id')
     .isMongoId()
-    .withMessage('Invalid event ID'),
+    .withMessage('Invalid announcement ID'),
 ];

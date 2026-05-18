@@ -2,13 +2,28 @@ import winston from 'winston';
 import path from 'path';
 import fs from 'fs';
 
-// Create logs directory if it doesn't exist
-const logsDir = path.join(process.cwd(), 'logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir);
-}
-
 const logLevel = process.env.LOG_LEVEL || 'info';
+const isProduction = process.env.NODE_ENV === 'production';
+const logToFiles = process.env.LOG_TO_FILES === 'true';
+
+const transports: winston.transport[] = [];
+
+if (!isProduction || logToFiles) {
+  const logsDir = path.join(process.cwd(), 'logs');
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir);
+  }
+
+  transports.push(
+    new winston.transports.File({
+      filename: path.join(logsDir, 'error.log'),
+      level: 'error',
+    }),
+    new winston.transports.File({
+      filename: path.join(logsDir, 'combined.log'),
+    })
+  );
+}
 
 const logger = winston.createLogger({
   level: logLevel,
@@ -19,21 +34,12 @@ const logger = winston.createLogger({
     winston.format.json()
   ),
   defaultMeta: { service: 'cict-backend' },
-  transports: [
-    // Write all logs with importance level of 'error' or less to error.log
-    new winston.transports.File({ 
-      filename: path.join(logsDir, 'error.log'), 
-      level: 'error' 
-    }),
-    // Write all logs to combined.log
-    new winston.transports.File({ 
-      filename: path.join(logsDir, 'combined.log') 
-    }),
-  ],
+  transports,
 });
 
-// If we're not in production, log to the console as well
-if (process.env.NODE_ENV !== 'production') {
+if (isProduction) {
+  logger.add(new winston.transports.Console());
+} else {
   logger.add(new winston.transports.Console({
     format: winston.format.combine(
       winston.format.colorize(),

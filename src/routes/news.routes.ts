@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import * as newsController from '../controllers/news.controller';
 import { authenticate, optionalAuthenticate } from '../middleware/auth';
-import { authorize } from '../middleware/permissions';
+import { requireAdminAccess } from '../middleware/permissions';
 import { validate } from '../middleware/validate';
 import { logActivity } from '../middleware/activityLogger';
 import { handleImageUpload, upload } from '../middleware/upload';
@@ -10,7 +10,6 @@ import {
   updateNewsValidator, 
   newsIdValidator 
 } from '../validators/news.validator';
-import { Permission } from '../types';
 
 const router: Router = Router();
 
@@ -20,9 +19,9 @@ const router: Router = Router();
  * @access  Private (requires CREATE_NEWS permission)
  */
 router.post(
-  '/',
+ '/',
   authenticate,
-  authorize(Permission.CREATE_NEWS),
+  requireAdminAccess,
   upload.single('image'),
   handleImageUpload,
   validate(createNewsValidator),
@@ -59,9 +58,9 @@ router.get(
  * @access  Private (requires EDIT_NEWS permission)
  */
 router.put(
-  '/:id',
+ '/:id',
   authenticate,
-  authorize(Permission.EDIT_NEWS),
+  requireAdminAccess,
   upload.single('image'),
   handleImageUpload,
   validate(updateNewsValidator),
@@ -75,9 +74,9 @@ router.put(
  * @access  Private (requires DELETE_NEWS permission)
  */
 router.delete(
-  '/:id',
+ '/:id',
   authenticate,
-  authorize(Permission.DELETE_NEWS),
+  requireAdminAccess,
   validate(newsIdValidator),
   logActivity('delete', 'news'),
   newsController.deleteNews
@@ -89,9 +88,9 @@ router.delete(
  * @access  Private (requires PUBLISH_NEWS permission)
  */
 router.patch(
-  '/:id/publish',
+ '/:id/publish',
   authenticate,
-  authorize(Permission.PUBLISH_NEWS),
+  requireAdminAccess,
   validate(newsIdValidator),
   logActivity('publish', 'news'),
   newsController.publishNews
@@ -103,9 +102,9 @@ router.patch(
  * @access  Private (requires ARCHIVE_NEWS permission)
  */
 router.patch(
-  '/:id/archive',
+ '/:id/archive',
   authenticate,
-  authorize(Permission.ARCHIVE_NEWS),
+  requireAdminAccess,
   validate(newsIdValidator),
   logActivity('archive', 'news'),
   newsController.archiveNews
