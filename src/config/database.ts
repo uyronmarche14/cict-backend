@@ -3,7 +3,11 @@ import logger from '../utils/logger';
 
 const connectDB = async (): Promise<void> => {
   try {
-    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/cict-crm';
+    const mongoURI = process.env.MONGODB_URI;
+
+    if (!mongoURI) {
+      throw new Error('MONGODB_URI is required');
+    }
     
     await mongoose.connect(mongoURI);
     

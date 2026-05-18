@@ -1,10 +1,15 @@
 import { Router } from 'express';
 import * as announcementController from '../controllers/announcement.controller';
 import { authenticate } from '../middleware/auth';
-import { authorize } from '../middleware/permissions';
+import { requireAdminAccess } from '../middleware/permissions';
 import { logActivity } from '../middleware/activityLogger';
 import { handleImageUpload, upload } from '../middleware/upload';
-import { Permission } from '../types';
+import { validate } from '../middleware/validate';
+import {
+  announcementIdValidator,
+  createAnnouncementValidator,
+  updateAnnouncementValidator,
+} from '../validators/announcement.validator';
 
 const router: Router = Router();
 
@@ -16,9 +21,10 @@ const router: Router = Router();
 router.post(
   '/',
   authenticate,
-  authorize(Permission.CREATE_ANNOUNCEMENT),
+  requireAdminAccess,
   upload.single('image'),
   handleImageUpload,
+  validate(createAnnouncementValidator),
   logActivity('create', 'announcement'),
   announcementController.createAnnouncement
 );
@@ -31,7 +37,7 @@ router.post(
 router.get(
   '/',
   authenticate,
-  authorize(Permission.VIEW_ANNOUNCEMENT),
+  requireAdminAccess,
   announcementController.getAllAnnouncements
 );
 
@@ -43,7 +49,8 @@ router.get(
 router.get(
   '/:id',
   authenticate,
-  authorize(Permission.VIEW_ANNOUNCEMENT),
+  requireAdminAccess,
+  validate(announcementIdValidator),
   announcementController.getAnnouncementById
 );
 
@@ -55,9 +62,10 @@ router.get(
 router.put(
   '/:id',
   authenticate,
-  authorize(Permission.EDIT_ANNOUNCEMENT),
+  requireAdminAccess,
   upload.single('image'),
   handleImageUpload,
+  validate(updateAnnouncementValidator),
   logActivity('update', 'announcement'),
   announcementController.updateAnnouncement
 );
@@ -70,7 +78,8 @@ router.put(
 router.delete(
   '/:id',
   authenticate,
-  authorize(Permission.DELETE_ANNOUNCEMENT),
+  requireAdminAccess,
+  validate(announcementIdValidator),
   logActivity('delete', 'announcement'),
   announcementController.deleteAnnouncement
 );
@@ -83,7 +92,8 @@ router.delete(
 router.patch(
   '/:id/publish',
   authenticate,
-  authorize(Permission.PUBLISH_ANNOUNCEMENT),
+  requireAdminAccess,
+  validate(announcementIdValidator),
   logActivity('publish', 'announcement'),
   announcementController.publishAnnouncement
 );
@@ -96,7 +106,8 @@ router.patch(
 router.patch(
   '/:id/archive',
   authenticate,
-  authorize(Permission.ARCHIVE_ANNOUNCEMENT),
+  requireAdminAccess,
+  validate(announcementIdValidator),
   logActivity('archive', 'announcement'),
   announcementController.archiveAnnouncement
 );

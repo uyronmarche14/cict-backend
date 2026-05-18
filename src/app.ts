@@ -3,7 +3,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
@@ -12,6 +11,11 @@ import userRoutes from './routes/user.routes';
 import roleRoutes from './routes/role.routes';
 import announcementRoutes from './routes/announcement.routes';
 import eventRoutes from './routes/event.routes';
+import organizationRoutes from './routes/organization.routes';
+import publicAnnouncementRoutes from './routes/public-announcement.routes';
+import adminRoutes from './routes/admin.routes';
+import uploadRoutes from './routes/upload.routes';
+import faqRoutes from './routes/faq.routes';
 
 // Import middleware
 import { errorHandler, notFound } from './middleware/errorHandler';
@@ -19,12 +23,12 @@ import { errorHandler, notFound } from './middleware/errorHandler';
 // Import utilities
 import logger from './utils/logger';
 import connectDB from './config/database';
-
-// Load environment variables
-dotenv.config();
+import { validateEnv } from './config/validateEnv';
 
 // Create Express app
 const app: Application = express();
+
+validateEnv();
 
 // Connect to database
 connectDB();
@@ -32,16 +36,38 @@ connectDB();
 // Security middleware
 app.use(helmet());
 
+const configuredOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const allowedOrigins = new Set([
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002',
+  'http://localhost:3003',
+  'http://localhost:3004',
+  ...configuredOrigins,
+]);
+
+const allowVercelPreviews = process.env.ALLOW_VERCEL_PREVIEWS === 'true';
+const vercelPreviewPattern = /^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.vercel\.app$/i;
+
 // CORS configuration
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002',
-    'http://localhost:3003',
-    'http://localhost:3004',
-    process.env.CORS_ORIGIN || ''
-  ].filter(Boolean),
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.has(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    if (allowVercelPreviews && vercelPreviewPattern.test(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -87,7 +113,12 @@ app.use('/api/news', newsRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/announcements', announcementRoutes);
+app.use('/api/public/announcements', publicAnnouncementRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/organizations', organizationRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/uploads', uploadRoutes);
+app.use('/api/faqs', faqRoutes);
 
 // 404 handler
 app.use(notFound);

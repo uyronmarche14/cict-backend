@@ -1,29 +1,14 @@
 import { Router } from 'express';
 import * as authController from '../controllers/auth.controller';
 import { authenticate } from '../middleware/auth';
+import { requireAdminAccess } from '../middleware/permissions';
 import { validate } from '../middleware/validate';
 import { 
-  registerValidator, 
   loginValidator, 
   updatePasswordValidator 
 } from '../validators/auth.validator';
-import { authorize } from '../middleware/permissions';
-import { Permission } from '../types';
 
 const router: Router = Router();
-
-/**
- * @route   POST /api/auth/register
- * @desc    Register new user (admin only)
- * @access  Private (Full Admin)
- */
-router.post(
-  '/register',
-  authenticate,
-  authorize(Permission.CREATE_MEMBER),
-  validate(registerValidator),
-  authController.register
-);
 
 /**
  * @route   POST /api/auth/login
@@ -34,6 +19,15 @@ router.post(
   '/login',
   validate(loginValidator),
   authController.login
+);
+
+router.post('/logout', authController.logout);
+
+router.get(
+  '/permission-metadata',
+  authenticate,
+  requireAdminAccess,
+  authController.getPermissionMetadata
 );
 
 /**

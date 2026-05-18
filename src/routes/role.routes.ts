@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import * as roleController from '../controllers/role.controller';
 import { authenticate } from '../middleware/auth';
-import { authorize } from '../middleware/permissions';
+import { authorize, authorizeAny } from '../middleware/permissions';
 import { logActivity } from '../middleware/activityLogger';
 import { Permission } from '../types';
 
@@ -28,7 +28,7 @@ router.post(
 router.get(
   '/',
   authenticate,
-  authorize(Permission.VIEW_ROLE),
+  authorizeAny(Permission.VIEW_ROLE, Permission.ASSIGN_ROLE),
   roleController.getAllRoles
 );
 

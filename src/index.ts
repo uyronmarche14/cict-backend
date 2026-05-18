@@ -1,3 +1,4 @@
+import './config/loadEnv';
 import app from './app';
 import logger from './utils/logger';
 

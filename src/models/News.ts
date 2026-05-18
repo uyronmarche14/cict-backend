@@ -1,5 +1,65 @@
 import mongoose, { Schema } from 'mongoose';
-import { INews, NewsStatus } from '../types';
+import { ContentOwnerType, INews, NewsStatus } from '../types';
+
+const mediaAssetSchema = new Schema(
+  {
+    imageUrl: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    imageId: {
+      type: String,
+      trim: true,
+    },
+    assetFingerprint: {
+      type: String,
+      trim: true,
+    },
+    alt: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: [200, 'Alt text cannot exceed 200 characters'],
+    },
+    caption: {
+      type: String,
+      trim: true,
+      maxlength: [300, 'Caption cannot exceed 300 characters'],
+    },
+    sortOrder: {
+      type: Number,
+      default: 0,
+    },
+  },
+  { _id: false }
+);
+
+const contentSectionSchema = new Schema(
+  {
+    heading: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: [120, 'Section heading cannot exceed 120 characters'],
+    },
+    style: {
+      type: String,
+      enum: ['default', 'callout', 'checklist'],
+      default: 'default',
+    },
+    bodyHtml: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    items: {
+      type: [String],
+      default: [],
+    },
+  },
+  { _id: false }
+);
 
 const newsSchema = new Schema<INews>(
   {
@@ -11,7 +71,11 @@ const newsSchema = new Schema<INews>(
     },
     content: {
       type: String,
-      required: [true, 'Content is required'],
+      default: '',
+    },
+    bodyHtml: {
+      type: String,
+      required: [true, 'Body content is required'],
     },
     excerpt: {
       type: String,
@@ -22,6 +86,18 @@ const newsSchema = new Schema<INews>(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
+    },
+    ownerType: {
+      type: String,
+      enum: Object.values(ContentOwnerType),
+      default: ContentOwnerType.SYSTEM,
+      required: true,
+    },
+    organizationId: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      default: null,
     },
     status: {
       type: String,
@@ -36,6 +112,18 @@ const newsSchema = new Schema<INews>(
     },
     tags: {
       type: [String],
+      default: [],
+    },
+    sections: {
+      type: [contentSectionSchema],
+      default: [],
+    },
+    coverImage: {
+      type: mediaAssetSchema,
+      required: false,
+    },
+    gallery: {
+      type: [mediaAssetSchema],
       default: [],
     },
     imageUrl: {
@@ -54,8 +142,15 @@ const newsSchema = new Schema<INews>(
 newsSchema.index({ status: 1, publishedAt: -1 });
 newsSchema.index({ author: 1 });
 newsSchema.index({ tags: 1 });
+newsSchema.index({ ownerType: 1, organizationId: 1 });
 
 // Auto-set publishedAt when status changes to published
+newsSchema.pre('validate', function () {
+    if (!this.bodyHtml && this.content) {
+        this.bodyHtml = `<p>${this.content}</p>`;
+    }
+});
+
 newsSchema.pre('save', function () {
     if (this.isModified('status') && this.status === NewsStatus.PUBLISHED && !this.publishedAt) {
         this.publishedAt = new Date();
