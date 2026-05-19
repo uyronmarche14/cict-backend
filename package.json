@@ -18,6 +18,11 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/morgan": "^1.9.10",
+    "@types/node": "^24.10.1",
     "@types/multer": "^2.0.0",
     "@types/streamifier": "^0.1.2",
     "bcryptjs": "^3.0.3",
@@ -33,22 +38,17 @@
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
     "streamifier": "^0.1.1",
+    "typescript": "^5.9.3",
     "winston": "^3.18.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
     "@types/express-validator": "^3.0.2",
-    "@types/jsonwebtoken": "^9.0.10",
-    "@types/morgan": "^1.9.10",
-    "@types/node": "^24.10.1",
     "@types/supertest": "^7.2.0",
     "mongodb-memory-server": "^11.1.0",
     "nodemon": "^3.1.11",
     "supertest": "^7.2.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3",
     "vitest": "^4.1.6"
   }
 }
