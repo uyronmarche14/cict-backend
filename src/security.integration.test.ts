@@ -285,8 +285,7 @@ describe('Security-first MVP regression suite', () => {
         email: 'cookie-user@example.com',
       });
 
-      const agent = request.agent(app);
-      const loginResponse = await agent.post('/api/auth/login').send({
+      const loginResponse = await request(app).post('/api/auth/login').send({
         email: loginUser.user.email,
         password: TEST_PASSWORD,
       });
@@ -298,11 +297,16 @@ describe('Security-first MVP regression suite', () => {
       expect(loginCookie).toContain('Secure');
       expect(loginCookie).toContain('Domain=cict-backend.onrender.com');
 
-      const profileResponse = await agent.get('/api/auth/profile');
+      const tokenCookie = loginCookie.split(';')[0];
+      const profileResponse = await request(app)
+        .get('/api/auth/profile')
+        .set('Cookie', tokenCookie);
       expect(profileResponse.status).toBe(200);
       expect(profileResponse.body.data.user.email).toBe(loginUser.user.email);
 
-      const logoutResponse = await agent.post('/api/auth/logout');
+      const logoutResponse = await request(app)
+        .post('/api/auth/logout')
+        .set('Cookie', tokenCookie);
       expect(logoutResponse.status).toBe(200);
       const clearedCookie = logoutResponse.headers['set-cookie']?.[0] ?? '';
       expect(clearedCookie).toContain('token=');
