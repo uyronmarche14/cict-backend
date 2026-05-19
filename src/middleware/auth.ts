@@ -87,7 +87,7 @@ export const authenticate = async (
     }
 
     try {
-      req.user = await buildAuthenticatedUser(user, decoded);
+      req.user = await buildAuthenticatedUser(user);
     } catch (roleError) {
       res.status(403).json({
         success: false,
@@ -148,7 +148,7 @@ export const optionalAuthenticate = async (
 
           if (user?.isActive) {
             try {
-              req.user = await buildAuthenticatedUser(user, decoded);
+              req.user = await buildAuthenticatedUser(user);
             } catch (_roleError) {
               req.user = undefined;
             }

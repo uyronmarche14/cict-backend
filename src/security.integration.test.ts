@@ -268,6 +268,91 @@ describe('Security-first MVP regression suite', () => {
     expect(deletedResponse.body.message).toBe('User no longer exists');
   });
 
+  it('uses cross-site-safe cookie settings in production and clears the same cookie on logout', async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalCookieSameSite = process.env.COOKIE_SAME_SITE;
+    const originalCookieSecure = process.env.COOKIE_SECURE;
+    const originalCookieDomain = process.env.COOKIE_DOMAIN;
+
+    try {
+      process.env.NODE_ENV = 'production';
+      process.env.COOKIE_SAME_SITE = 'none';
+      process.env.COOKIE_SECURE = 'true';
+      process.env.COOKIE_DOMAIN = 'cict-backend.onrender.com';
+
+      const loginUser = await createSystemUser({
+        role: UserRole.FULL_ADMIN,
+        email: 'cookie-user@example.com',
+      });
+
+      const agent = request.agent(app);
+      const loginResponse = await agent.post('/api/auth/login').send({
+        email: loginUser.user.email,
+        password: TEST_PASSWORD,
+      });
+
+      expect(loginResponse.status).toBe(200);
+      const loginCookie = loginResponse.headers['set-cookie']?.[0] ?? '';
+      expect(loginCookie).toContain('token=');
+      expect(loginCookie).toContain('SameSite=None');
+      expect(loginCookie).toContain('Secure');
+      expect(loginCookie).toContain('Domain=cict-backend.onrender.com');
+
+      const profileResponse = await agent.get('/api/auth/profile');
+      expect(profileResponse.status).toBe(200);
+      expect(profileResponse.body.data.user.email).toBe(loginUser.user.email);
+
+      const logoutResponse = await agent.post('/api/auth/logout');
+      expect(logoutResponse.status).toBe(200);
+      const clearedCookie = logoutResponse.headers['set-cookie']?.[0] ?? '';
+      expect(clearedCookie).toContain('token=');
+      expect(clearedCookie).toContain('SameSite=None');
+      expect(clearedCookie).toContain('Secure');
+      expect(clearedCookie).toContain('Domain=cict-backend.onrender.com');
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+      process.env.COOKIE_SAME_SITE = originalCookieSameSite;
+      process.env.COOKIE_SECURE = originalCookieSecure;
+      process.env.COOKIE_DOMAIN = originalCookieDomain;
+    }
+  });
+
+  it('uses the database custom role state instead of stale JWT custom-role data', async () => {
+    const { user: fullAdmin } = await createSystemUser({ role: UserRole.FULL_ADMIN });
+    const staleRole = await Role.create({
+      name: 'Stale publisher',
+      description: 'Old global custom role',
+      permissions: [Permission.PUBLISH_NEWS],
+      isSystemRole: false,
+      createdBy: fullAdmin._id,
+    });
+
+    const scopedUser = await createSystemUser({
+      role: UserRole.SUPPORT,
+      email: 'stale-role-user@example.com',
+    });
+
+    scopedUser.user.customRole = staleRole._id;
+    await scopedUser.user.save();
+
+    const staleToken = signToken(scopedUser.user);
+
+    scopedUser.user.customRole = undefined;
+    await scopedUser.user.save();
+
+    const profileResponse = await request(app)
+      .get('/api/auth/profile')
+      .set(authHeader(staleToken));
+
+    expect(profileResponse.status).toBe(200);
+    expect(profileResponse.body.data.user.customRole).toBeNull();
+    expect(profileResponse.body.data.user.effectiveRoleKind).toBe('system');
+    expect(profileResponse.body.data.user.effectiveRoleLabel).toBe('Support');
+    expect(profileResponse.body.data.user.effectivePermissions).toEqual(
+      expect.not.arrayContaining([Permission.PUBLISH_NEWS])
+    );
+  });
+
   it('blocks privileged account creation without role-assignment permission and rejects missing custom roles', async () => {
     const { user: fullAdmin } = await createSystemUser({ role: UserRole.FULL_ADMIN });
     const creator = await createPermissionedUser([Permission.CREATE_USER], fullAdmin);

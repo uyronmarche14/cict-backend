@@ -2,7 +2,6 @@ import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
@@ -19,6 +18,7 @@ import faqRoutes from './routes/faq.routes';
 
 // Import middleware
 import { errorHandler, notFound } from './middleware/errorHandler';
+import { createGeneralApiRateLimiter } from './middleware/rateLimiters';
 
 // Import utilities
 import logger from './utils/logger';
@@ -74,14 +74,7 @@ app.use(cors({
 }));
 
 // Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
-  message: 'Too many requests from this IP, please try again later.',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use('/api', limiter);
+app.use('/api', createGeneralApiRateLimiter());
 
 // Body parser middleware
 app.use(express.json({ limit: '10mb' }));

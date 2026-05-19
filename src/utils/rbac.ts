@@ -5,7 +5,6 @@ import {
   AdminModule,
   IAdminScopes,
   IAuthenticatedUser,
-  IJWTPayload,
   IResolvedOrganizationAssignment,
   IScopedAdminModulesByOrganization,
   IUser,
@@ -384,12 +383,10 @@ const resolveSerializedCustomRole = async (
 };
 
 export const buildAuthenticatedUser = async (
-  user: IUser,
-  tokenPayload?: IJWTPayload
+  user: IUser
 ): Promise<IAuthenticatedUser> => {
   const customRoleId =
-    (user.customRole as { toString?: () => string } | undefined)?.toString?.() ||
-    tokenPayload?.customRole;
+    (user.customRole as { toString?: () => string } | undefined)?.toString?.() ?? null;
   const customRole = customRoleId
     ? await Role.findById(customRoleId).select('name description permissions')
     : null;
@@ -415,7 +412,7 @@ export const buildAuthenticatedUser = async (
     firstName: user.firstName,
     lastName: user.lastName,
     role: user.role,
-    customRole: customRoleId,
+    customRole: customRoleId ?? undefined,
     customRoleDetails: serializedCustomRole,
     permissions,
     baseRoleLabel: getSystemRoleLabel(user.role),

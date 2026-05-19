@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import * as authController from '../controllers/auth.controller';
 import { authenticate } from '../middleware/auth';
+import {
+  createAuthLoginRateLimiter,
+  createAuthSessionRateLimiter,
+} from '../middleware/rateLimiters';
 import { requireAdminAccess } from '../middleware/permissions';
 import { validate } from '../middleware/validate';
 import { 
@@ -17,11 +21,12 @@ const router: Router = Router();
  */
 router.post(
   '/login',
+  createAuthLoginRateLimiter(),
   validate(loginValidator),
   authController.login
 );
 
-router.post('/logout', authController.logout);
+router.post('/logout', createAuthSessionRateLimiter(), authController.logout);
 
 router.get(
   '/permission-metadata',
@@ -37,6 +42,7 @@ router.get(
  */
 router.get(
   '/profile',
+  createAuthSessionRateLimiter(),
   authenticate,
   authController.getProfile
 );

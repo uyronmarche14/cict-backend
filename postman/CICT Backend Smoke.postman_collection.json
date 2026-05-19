@@ -1,0 +1,175 @@
+{
+  "info": {
+    "name": "CICT Backend Smoke",
+    "_postman_id": "6b868522-5c0c-4b13-b402-f3ee49f2a0c7",
+    "description": "Basic health, login, and profile checks for the Render backend.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://cict-backend.onrender.com"
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@cict.edu"
+    },
+    {
+      "key": "adminPassword",
+      "value": "Admin@123456"
+    },
+    {
+      "key": "authToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Health endpoint returns 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "pm.test('Health response marks success', function () {",
+              "  pm.expect(json.success).to.eql(true);",
+              "});",
+              "",
+              "pm.test('Health response includes running message', function () {",
+              "  pm.expect(json.message).to.eql('Server is running');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Login returns 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "pm.test('Login response marks success', function () {",
+              "  pm.expect(json.success).to.eql(true);",
+              "  pm.expect(json.message).to.eql('Login successful');",
+              "});",
+              "",
+              "pm.test('Login returns admin user payload', function () {",
+              "  pm.expect(json.data.user.email).to.eql(pm.collectionVariables.get('adminEmail'));",
+              "  pm.expect(json.data.user.canAccessAdmin).to.eql(true);",
+              "});",
+              "",
+              "const setCookie = pm.response.headers.get('set-cookie') || '';",
+              "const match = setCookie.match(/token=([^;]+)/);",
+              "if (match) {",
+              "  pm.collectionVariables.set('authToken', match[1]);",
+              "}",
+              "",
+              "pm.test('Auth token captured from cookie', function () {",
+              "  pm.expect(pm.collectionVariables.get('authToken')).to.be.a('string').and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Profile",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/profile",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "profile"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Profile returns 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "pm.test('Profile response returns the seeded admin', function () {",
+              "  pm.expect(json.success).to.eql(true);",
+              "  pm.expect(json.data.user.email).to.eql(pm.collectionVariables.get('adminEmail'));",
+              "  pm.expect(json.data.user.role).to.eql('full_admin');",
+              "});",
+              "",
+              "pm.test('Profile exposes admin access', function () {",
+              "  pm.expect(json.data.canAccessAdmin).to.eql(true);",
+              "  pm.expect(json.data.visibleAdminModules).to.include('dashboard');",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

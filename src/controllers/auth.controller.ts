@@ -6,6 +6,7 @@ import { AppError } from '../middleware/errorHandler';
 import logger from '../utils/logger';
 import { AuthRequest } from '../middleware/auth';
 import { buildAuthenticatedUser, serializeAuthUser } from '../utils/rbac';
+import { getAuthCookieOptions } from '../utils/authCookies';
 import { getPermissionMetadata as getPermissionMetadataCatalog } from '../utils/permissionMetadata';
 
 /**
@@ -29,14 +30,6 @@ const generateToken = (payload: IJWTPayload): string => {
   
   return jwt.sign(plainPayload, jwtSecret as jwt.Secret, { expiresIn: jwtExpire } as jwt.SignOptions);
 };
-
-const getCookieOptions = () => ({
-  httpOnly: true,
-  sameSite: 'lax' as const,
-  secure: process.env.NODE_ENV === 'production',
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-  path: '/',
-});
 
 /**
  * Login user
@@ -77,10 +70,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     };
     
     const token = generateToken(tokenPayload);
-    const authenticatedUser = await buildAuthenticatedUser(user, tokenPayload);
+    const authenticatedUser = await buildAuthenticatedUser(user);
     const serializedUser = await serializeAuthUser(authenticatedUser);
 
-    res.cookie('token', token, getCookieOptions());
+    res.cookie('token', token, getAuthCookieOptions());
     
     logger.info(`User logged in: ${user.email}`);
     
@@ -107,7 +100,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
  */
 export const logout = async (_req: Request, res: Response): Promise<void> => {
   res.clearCookie('token', {
-    ...getCookieOptions(),
+    ...getAuthCookieOptions(),
     maxAge: undefined,
   });
 
