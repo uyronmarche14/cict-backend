@@ -25,6 +25,7 @@ import {
   buildApprovedApprovalSummary,
   buildRejectedApprovalSummary,
   buildSubmittedApprovalSummary,
+  canPublishFromWorkflowStatus,
   ensureFullAdminApprover,
   recordContentApprovalAction,
   shouldResetApprovalOnEdit,
@@ -611,16 +612,16 @@ export const publishEvent = async (req: AuthRequest, res: Response): Promise<voi
       throw new AppError('Event not found', 404);
     }
 
-    if (event.status !== EventStatus.APPROVED) {
-      throw new AppError('Only approved events can be published', 400);
-    }
-
     await ensureCanManageOwnedContent(
       req.user,
       Permission.PUBLISH_EVENT,
       event.ownerType,
       event.organizationId ?? null
     );
+
+    if (!canPublishFromWorkflowStatus(event.status)) {
+      throw new AppError('Only draft or approved events can be published', 400);
+    }
 
     const fromStatus = event.status;
     event.status = EventStatus.PUBLISHED;

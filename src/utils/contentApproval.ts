@@ -18,6 +18,16 @@ const RESETTABLE_APPROVAL_STATUSES = new Set<string>([
 export const shouldResetApprovalOnEdit = (status: string): boolean =>
   RESETTABLE_APPROVAL_STATUSES.has(status);
 
+const PUBLISHABLE_WORKFLOW_STATUSES = new Set<string>([
+  NewsStatus.DRAFT,
+  NewsStatus.APPROVED,
+  EventStatus.DRAFT,
+  EventStatus.APPROVED,
+]);
+
+export const canPublishFromWorkflowStatus = (status: string): boolean =>
+  PUBLISHABLE_WORKFLOW_STATUSES.has(status);
+
 export const ensureFullAdminApprover = (user?: IAuthenticatedUser): void => {
   if (!user) {
     throw new AppError('User not authenticated', 401);

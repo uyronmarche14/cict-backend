@@ -24,6 +24,7 @@ import {
   buildApprovedApprovalSummary,
   buildRejectedApprovalSummary,
   buildSubmittedApprovalSummary,
+  canPublishFromWorkflowStatus,
   ensureFullAdminApprover,
   recordContentApprovalAction,
   shouldResetApprovalOnEdit,
@@ -554,16 +555,16 @@ export const publishNews = async (req: AuthRequest, res: Response): Promise<void
       throw new AppError('News article not found', 404);
     }
 
-    if (news.status !== NewsStatus.APPROVED) {
-      throw new AppError('Only approved news can be published', 400);
-    }
-
     await ensureCanManageOwnedContent(
       req.user,
       Permission.PUBLISH_NEWS,
       news.ownerType,
       news.organizationId ?? null
     );
+
+    if (!canPublishFromWorkflowStatus(news.status)) {
+      throw new AppError('Only draft or approved news can be published', 400);
+    }
 
     const fromStatus = news.status;
     news.status = NewsStatus.PUBLISHED;
