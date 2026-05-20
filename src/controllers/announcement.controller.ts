@@ -30,6 +30,7 @@ import {
   buildApprovedApprovalSummary,
   buildRejectedApprovalSummary,
   buildSubmittedApprovalSummary,
+  canPublishFromWorkflowStatus,
   ensureFullAdminApprover,
   recordContentApprovalAction,
   shouldResetApprovalOnEdit,
@@ -668,16 +669,16 @@ export const publishAnnouncement = async (req: AuthRequest, res: Response): Prom
       throw new AppError('Announcement not found', 404);
     }
 
-    if (announcement.status !== NewsStatus.APPROVED) {
-      throw new AppError('Only approved announcements can be published', 400);
-    }
-
     await ensureCanManageOwnedContent(
       req.user,
       Permission.PUBLISH_ANNOUNCEMENT,
       announcement.ownerType,
       announcement.organizationId ?? null
     );
+
+    if (!canPublishFromWorkflowStatus(announcement.status)) {
+      throw new AppError('Only draft or approved announcements can be published', 400);
+    }
 
     const fromStatus = announcement.status;
     announcement.status = NewsStatus.PUBLISHED;
