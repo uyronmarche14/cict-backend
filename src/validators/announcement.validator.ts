@@ -104,6 +104,16 @@ export const createAnnouncementValidator = [
     .not()
     .exists()
     .withMessage('Use the publish/archive workflow endpoints to change status'),
+
+  body('approvalSummary')
+    .not()
+    .exists()
+    .withMessage('approvalSummary is managed by workflow endpoints'),
+
+  body('processInstanceId')
+    .not()
+    .exists()
+    .withMessage('processInstanceId is managed by workflow endpoints'),
 ];
 
 export const updateAnnouncementValidator = [
@@ -199,6 +209,16 @@ export const updateAnnouncementValidator = [
     .not()
     .exists()
     .withMessage('isActive is managed by workflow endpoints'),
+
+  body('approvalSummary')
+    .not()
+    .exists()
+    .withMessage('approvalSummary is managed by workflow endpoints'),
+
+  body('processInstanceId')
+    .not()
+    .exists()
+    .withMessage('processInstanceId is managed by workflow endpoints'),
 ];
 
 export const announcementIdValidator = [

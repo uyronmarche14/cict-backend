@@ -26,6 +26,14 @@ import {
 } from '../utils/organizationScope';
 import { attachOrganizationName, attachOrganizationNames } from '../utils/ownedContent';
 import { hasGlobalPermission } from '../utils/rbac';
+import {
+  buildApprovedApprovalSummary,
+  buildRejectedApprovalSummary,
+  buildSubmittedApprovalSummary,
+  ensureFullAdminApprover,
+  recordContentApprovalAction,
+  shouldResetApprovalOnEdit,
+} from '../utils/contentApproval';
 
 const ANNOUNCEMENT_EDITABLE_FIELDS = [
   'title',
@@ -452,6 +460,11 @@ export const updateAnnouncement = async (req: AuthRequest, res: Response): Promi
     (updates as Record<string, unknown>).ownerType = nextOwnership.ownerType;
     (updates as Record<string, unknown>).organizationId = nextOwnership.organizationId;
 
+    if (shouldResetApprovalOnEdit(existingAnnouncement.status)) {
+      (updates as Record<string, unknown>).status = NewsStatus.DRAFT;
+      (updates as Record<string, unknown>).approvalSummary = undefined;
+    }
+
     const announcement = await Announcement.findByIdAndUpdate(
       id,
       { $set: updates },
@@ -472,6 +485,135 @@ export const updateAnnouncement = async (req: AuthRequest, res: Response): Promi
   } catch (error) {
     throw error;
   }
+};
+
+export const submitAnnouncementForApproval = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  const { id } = req.params;
+  const announcement = await Announcement.findById(id).populate('author', 'firstName lastName email');
+
+  if (!announcement) {
+    throw new AppError('Announcement not found', 404);
+  }
+
+  if (announcement.status !== NewsStatus.DRAFT) {
+    throw new AppError('Only draft announcements can be submitted for approval', 400);
+  }
+
+  await ensureCanManageOwnedContent(
+    req.user,
+    Permission.SUBMIT_CONTENT_FOR_APPROVAL,
+    announcement.ownerType,
+    announcement.organizationId ?? null
+  );
+
+  const fromStatus = announcement.status;
+  announcement.status = NewsStatus.PENDING_APPROVAL;
+  announcement.approvalSummary = buildSubmittedApprovalSummary(
+    req.user!.userId,
+    announcement.approvalSummary
+  );
+  await announcement.save();
+  await recordContentApprovalAction({
+    contentType: 'announcement',
+    contentId: String(announcement._id),
+    actorUserId: req.user!.userId,
+    action: 'submitted',
+    fromStatus,
+    toStatus: announcement.status,
+    comment: typeof req.body.comment === 'string' ? req.body.comment.trim() : undefined,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Announcement submitted for approval',
+    data: { announcement },
+  });
+};
+
+export const approveAnnouncement = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const announcement = await Announcement.findById(id).populate('author', 'firstName lastName email');
+
+  if (!announcement) {
+    throw new AppError('Announcement not found', 404);
+  }
+
+  ensureFullAdminApprover(req.user);
+
+  if (announcement.status !== NewsStatus.PENDING_APPROVAL) {
+    throw new AppError('Only pending approval announcements can be approved', 400);
+  }
+
+  const fromStatus = announcement.status;
+  announcement.status = NewsStatus.APPROVED;
+  announcement.approvalSummary = buildApprovedApprovalSummary(
+    req.user!.userId,
+    announcement.approvalSummary
+  );
+  await announcement.save();
+  await recordContentApprovalAction({
+    contentType: 'announcement',
+    contentId: String(announcement._id),
+    actorUserId: req.user!.userId,
+    action: 'approved',
+    fromStatus,
+    toStatus: announcement.status,
+    comment: typeof req.body.comment === 'string' ? req.body.comment.trim() : undefined,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Announcement approved successfully',
+    data: { announcement },
+  });
+};
+
+export const rejectAnnouncement = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const reason = typeof req.body.reason === 'string' ? req.body.reason.trim() : '';
+  const announcement = await Announcement.findById(id).populate('author', 'firstName lastName email');
+
+  if (!announcement) {
+    throw new AppError('Announcement not found', 404);
+  }
+
+  ensureFullAdminApprover(req.user);
+
+  if (announcement.status !== NewsStatus.PENDING_APPROVAL) {
+    throw new AppError('Only pending approval announcements can be rejected', 400);
+  }
+
+  if (!reason) {
+    throw new AppError('Rejection reason is required', 400);
+  }
+
+  const fromStatus = announcement.status;
+  announcement.status = NewsStatus.REJECTED;
+  announcement.approvalSummary = buildRejectedApprovalSummary(
+    req.user!.userId,
+    reason,
+    announcement.approvalSummary
+  );
+  await announcement.save();
+  await recordContentApprovalAction({
+    contentType: 'announcement',
+    contentId: String(announcement._id),
+    actorUserId: req.user!.userId,
+    action: 'rejected',
+    fromStatus,
+    toStatus: announcement.status,
+    reason,
+    comment: typeof req.body.comment === 'string' ? req.body.comment.trim() : undefined,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Announcement rejected successfully',
+    data: { announcement },
+  });
 };
 
 /**
@@ -526,8 +668,8 @@ export const publishAnnouncement = async (req: AuthRequest, res: Response): Prom
       throw new AppError('Announcement not found', 404);
     }
 
-    if (announcement.status !== NewsStatus.DRAFT) {
-      throw new AppError('Only draft announcements can be published', 400);
+    if (announcement.status !== NewsStatus.APPROVED) {
+      throw new AppError('Only approved announcements can be published', 400);
     }
 
     await ensureCanManageOwnedContent(
@@ -537,11 +679,20 @@ export const publishAnnouncement = async (req: AuthRequest, res: Response): Prom
       announcement.organizationId ?? null
     );
 
+    const fromStatus = announcement.status;
     announcement.status = NewsStatus.PUBLISHED;
     announcement.publishedAt = new Date();
     announcement.archivedAt = undefined;
     announcement.isActive = true;
     await announcement.save();
+    await recordContentApprovalAction({
+      contentType: 'announcement',
+      contentId: String(announcement._id),
+      actorUserId: req.user!.userId,
+      action: 'published',
+      fromStatus,
+      toStatus: announcement.status,
+    });
 
     logger.info(`Announcement published: ${id} by user ${req.user?.userId}`);
 
@@ -578,10 +729,19 @@ export const archiveAnnouncement = async (req: AuthRequest, res: Response): Prom
       announcement.organizationId ?? null
     );
 
+    const fromStatus = announcement.status;
     announcement.status = NewsStatus.ARCHIVED;
     announcement.archivedAt = new Date();
     announcement.isActive = false;
     await announcement.save();
+    await recordContentApprovalAction({
+      contentType: 'announcement',
+      contentId: String(announcement._id),
+      actorUserId: req.user!.userId,
+      action: 'archived',
+      fromStatus,
+      toStatus: announcement.status,
+    });
 
     logger.info(`Announcement archived: ${id} by user ${req.user?.userId}`);
 

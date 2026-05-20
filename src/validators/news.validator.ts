@@ -96,6 +96,16 @@ export const createNewsValidator = [
     .not()
     .exists()
     .withMessage('Use the publish/archive workflow endpoints to change status'),
+
+  body('approvalSummary')
+    .not()
+    .exists()
+    .withMessage('approvalSummary is managed by workflow endpoints'),
+
+  body('processInstanceId')
+    .not()
+    .exists()
+    .withMessage('processInstanceId is managed by workflow endpoints'),
 ];
 
 export const updateNewsValidator = [
@@ -177,6 +187,16 @@ export const updateNewsValidator = [
     .not()
     .exists()
     .withMessage('archivedAt is managed by workflow endpoints'),
+
+  body('approvalSummary')
+    .not()
+    .exists()
+    .withMessage('approvalSummary is managed by workflow endpoints'),
+
+  body('processInstanceId')
+    .not()
+    .exists()
+    .withMessage('processInstanceId is managed by workflow endpoints'),
 ];
 
 export const newsIdValidator = [

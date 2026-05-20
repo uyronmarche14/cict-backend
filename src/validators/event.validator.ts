@@ -119,6 +119,16 @@ export const createEventValidator = [
     .exists()
     .withMessage('Use the event workflow endpoints to change status'),
 
+  body('approvalSummary')
+    .not()
+    .exists()
+    .withMessage('approvalSummary is managed by workflow endpoints'),
+
+  body('processInstanceId')
+    .not()
+    .exists()
+    .withMessage('processInstanceId is managed by workflow endpoints'),
+
   body('maxAttendees')
     .optional()
     .isInt({ min: 0 })
@@ -218,6 +228,16 @@ export const updateEventValidator = [
     .not()
     .exists()
     .withMessage('completedAt is managed by workflow endpoints'),
+
+  body('approvalSummary')
+    .not()
+    .exists()
+    .withMessage('approvalSummary is managed by workflow endpoints'),
+
+  body('processInstanceId')
+    .not()
+    .exists()
+    .withMessage('processInstanceId is managed by workflow endpoints'),
 
     body('maxAttendees')
     .optional()

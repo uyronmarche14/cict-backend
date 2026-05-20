@@ -10,6 +10,10 @@ import {
   updateEventValidator, 
   eventIdValidator 
 } from '../validators/event.validator';
+import {
+  contentApprovalCommentValidator,
+  contentRejectionValidator,
+} from '../validators/approval.validator';
 
 const router: Router = Router();
 
@@ -80,6 +84,33 @@ router.delete(
   validate(eventIdValidator),
   logActivity('delete', 'event'),
   eventController.deleteEvent
+);
+
+router.patch(
+  '/:id/submit',
+  authenticate,
+  requireAdminAccess,
+  validate([...eventIdValidator, ...contentApprovalCommentValidator]),
+  logActivity('submit_for_approval', 'event'),
+  eventController.submitEventForApproval
+);
+
+router.patch(
+  '/:id/approve',
+  authenticate,
+  requireAdminAccess,
+  validate([...eventIdValidator, ...contentApprovalCommentValidator]),
+  logActivity('approve', 'event'),
+  eventController.approveEvent
+);
+
+router.patch(
+  '/:id/reject',
+  authenticate,
+  requireAdminAccess,
+  validate([...eventIdValidator, ...contentRejectionValidator]),
+  logActivity('reject', 'event'),
+  eventController.rejectEvent
 );
 
 router.patch(

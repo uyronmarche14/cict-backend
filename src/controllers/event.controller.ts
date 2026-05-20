@@ -21,6 +21,14 @@ import {
 } from '../utils/organizationScope';
 import { attachOrganizationName, attachOrganizationNames } from '../utils/ownedContent';
 import { hasGlobalPermission } from '../utils/rbac';
+import {
+  buildApprovedApprovalSummary,
+  buildRejectedApprovalSummary,
+  buildSubmittedApprovalSummary,
+  ensureFullAdminApprover,
+  recordContentApprovalAction,
+  shouldResetApprovalOnEdit,
+} from '../utils/contentApproval';
 
 const EVENT_EDITABLE_FIELDS = [
   'title',
@@ -50,6 +58,25 @@ const buildEventUpdatePayload = (body: Record<string, unknown>) => {
   }
 
   return updates;
+};
+
+const parseEventDateInput = (value: unknown, fieldLabel: string): Date => {
+  const parsedDate = new Date(String(value));
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    throw new AppError(`${fieldLabel} must be a valid date`, 400);
+  }
+
+  return parsedDate;
+};
+
+const ensureValidEventDateRange = (startDateValue: unknown, endDateValue: unknown): void => {
+  const startDate = parseEventDateInput(startDateValue, 'Start date');
+  const endDate = parseEventDateInput(endDateValue, 'End date');
+
+  if (startDate.getTime() > endDate.getTime()) {
+    throw new AppError('Start date cannot be after end date', 400);
+  }
 };
 
 const canViewDraftEvents = (req: AuthRequest): boolean =>
@@ -116,9 +143,7 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
           : '';
     const resolvedCoverImage = normalizeMediaAsset(coverImage, { imageUrl, imageId });
 
-    if (new Date(startDate) > new Date(endDate)) {
-      throw new AppError('Start date cannot be after end date', 400);
-    }
+    ensureValidEventDateRange(startDate, endDate);
 
     const event = await Event.create({
       title,
@@ -354,9 +379,12 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
     const imageId = typeof req.body.imageId === 'string' ? req.body.imageId : undefined;
 
     if (updates.startDate && updates.endDate) {
-      if (new Date(String(updates.startDate)) > new Date(String(updates.endDate))) {
-        throw new AppError('Start date cannot be after end date', 400);
-      }
+      ensureValidEventDateRange(updates.startDate, updates.endDate);
+    } else if (updates.startDate || updates.endDate) {
+      ensureValidEventDateRange(
+        updates.startDate ?? existingEvent.startDate,
+        updates.endDate ?? existingEvent.endDate
+      );
     }
 
     if (bodyHtml !== undefined) {
@@ -390,6 +418,11 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
 
     (updates as Record<string, unknown>).ownerType = nextOwnership.ownerType;
     (updates as Record<string, unknown>).organizationId = nextOwnership.organizationId;
+
+    if (shouldResetApprovalOnEdit(existingEvent.status)) {
+      (updates as Record<string, unknown>).status = EventStatus.DRAFT;
+      (updates as Record<string, unknown>).approvalSummary = undefined;
+    }
 
     const event = await Event.findByIdAndUpdate(
       id,
@@ -453,6 +486,122 @@ export const deleteEvent = async (req: AuthRequest, res: Response): Promise<void
   }
 };
 
+export const submitEventForApproval = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const event = await Event.findById(id).populate('organizer', 'firstName lastName email');
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  if (event.status !== EventStatus.DRAFT) {
+    throw new AppError('Only draft events can be submitted for approval', 400);
+  }
+
+  await ensureCanManageOwnedContent(
+    req.user,
+    Permission.SUBMIT_CONTENT_FOR_APPROVAL,
+    event.ownerType,
+    event.organizationId ?? null
+  );
+
+  const fromStatus = event.status;
+  event.status = EventStatus.PENDING_APPROVAL;
+  event.approvalSummary = buildSubmittedApprovalSummary(req.user!.userId, event.approvalSummary);
+  await event.save();
+  await recordContentApprovalAction({
+    contentType: 'event',
+    contentId: String(event._id),
+    actorUserId: req.user!.userId,
+    action: 'submitted',
+    fromStatus,
+    toStatus: event.status,
+    comment: typeof req.body.comment === 'string' ? req.body.comment.trim() : undefined,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Event submitted for approval',
+    data: { event },
+  });
+};
+
+export const approveEvent = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const event = await Event.findById(id).populate('organizer', 'firstName lastName email');
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  ensureFullAdminApprover(req.user);
+
+  if (event.status !== EventStatus.PENDING_APPROVAL) {
+    throw new AppError('Only pending approval events can be approved', 400);
+  }
+
+  const fromStatus = event.status;
+  event.status = EventStatus.APPROVED;
+  event.approvalSummary = buildApprovedApprovalSummary(req.user!.userId, event.approvalSummary);
+  await event.save();
+  await recordContentApprovalAction({
+    contentType: 'event',
+    contentId: String(event._id),
+    actorUserId: req.user!.userId,
+    action: 'approved',
+    fromStatus,
+    toStatus: event.status,
+    comment: typeof req.body.comment === 'string' ? req.body.comment.trim() : undefined,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Event approved successfully',
+    data: { event },
+  });
+};
+
+export const rejectEvent = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const reason = typeof req.body.reason === 'string' ? req.body.reason.trim() : '';
+  const event = await Event.findById(id).populate('organizer', 'firstName lastName email');
+
+  if (!event) {
+    throw new AppError('Event not found', 404);
+  }
+
+  ensureFullAdminApprover(req.user);
+
+  if (event.status !== EventStatus.PENDING_APPROVAL) {
+    throw new AppError('Only pending approval events can be rejected', 400);
+  }
+
+  if (!reason) {
+    throw new AppError('Rejection reason is required', 400);
+  }
+
+  const fromStatus = event.status;
+  event.status = EventStatus.REJECTED;
+  event.approvalSummary = buildRejectedApprovalSummary(req.user!.userId, reason, event.approvalSummary);
+  await event.save();
+  await recordContentApprovalAction({
+    contentType: 'event',
+    contentId: String(event._id),
+    actorUserId: req.user!.userId,
+    action: 'rejected',
+    fromStatus,
+    toStatus: event.status,
+    reason,
+    comment: typeof req.body.comment === 'string' ? req.body.comment.trim() : undefined,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Event rejected successfully',
+    data: { event },
+  });
+};
+
 export const publishEvent = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -462,8 +611,8 @@ export const publishEvent = async (req: AuthRequest, res: Response): Promise<voi
       throw new AppError('Event not found', 404);
     }
 
-    if (event.status !== EventStatus.DRAFT) {
-      throw new AppError('Only draft events can be published', 400);
+    if (event.status !== EventStatus.APPROVED) {
+      throw new AppError('Only approved events can be published', 400);
     }
 
     await ensureCanManageOwnedContent(
@@ -473,11 +622,20 @@ export const publishEvent = async (req: AuthRequest, res: Response): Promise<voi
       event.organizationId ?? null
     );
 
+    const fromStatus = event.status;
     event.status = EventStatus.PUBLISHED;
     event.publishedAt = new Date();
     event.cancelledAt = undefined;
     event.completedAt = undefined;
     await event.save();
+    await recordContentApprovalAction({
+      contentType: 'event',
+      contentId: String(event._id),
+      actorUserId: req.user!.userId,
+      action: 'published',
+      fromStatus,
+      toStatus: event.status,
+    });
 
     logger.info(`Event published: ${id} by user ${req.user?.userId}`);
 

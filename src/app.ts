@@ -15,6 +15,12 @@ import publicAnnouncementRoutes from './routes/public-announcement.routes';
 import adminRoutes from './routes/admin.routes';
 import uploadRoutes from './routes/upload.routes';
 import faqRoutes from './routes/faq.routes';
+import auditRoutes from './routes/audit.routes';
+import studentAdminRoutes from './routes/student-admin.routes';
+import academicRoutes from './routes/academic.routes';
+import studentAuthRoutes from './routes/student-auth.routes';
+import studentRoutes from './routes/student.routes';
+import adminEventRoutes from './routes/admin-event.routes';
 
 // Import middleware
 import { errorHandler, notFound } from './middleware/errorHandler';
@@ -110,8 +116,14 @@ app.use('/api/public/announcements', publicAnnouncementRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/organizations', organizationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/students', studentAdminRoutes);
+app.use('/api/admin/academic', academicRoutes);
+app.use('/api/admin/events', adminEventRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/faqs', faqRoutes);
+app.use('/api/audit', auditRoutes);
+app.use('/api/student/auth', studentAuthRoutes);
+app.use('/api/student', studentRoutes);
 
 // 404 handler
 app.use(notFound);

@@ -5,11 +5,15 @@ import { requireAdminAccess } from '../middleware/permissions';
 import { validate } from '../middleware/validate';
 import { logActivity } from '../middleware/activityLogger';
 import { handleImageUpload, upload } from '../middleware/upload';
-import { 
+import {
   createNewsValidator, 
   updateNewsValidator, 
   newsIdValidator 
 } from '../validators/news.validator';
+import {
+  contentApprovalCommentValidator,
+  contentRejectionValidator,
+} from '../validators/approval.validator';
 
 const router: Router = Router();
 
@@ -87,6 +91,33 @@ router.delete(
  * @desc    Publish news article
  * @access  Private (requires PUBLISH_NEWS permission)
  */
+router.patch(
+ '/:id/submit',
+  authenticate,
+  requireAdminAccess,
+  validate([...newsIdValidator, ...contentApprovalCommentValidator]),
+  logActivity('submit_for_approval', 'news'),
+  newsController.submitNewsForApproval
+);
+
+router.patch(
+ '/:id/approve',
+  authenticate,
+  requireAdminAccess,
+  validate([...newsIdValidator, ...contentApprovalCommentValidator]),
+  logActivity('approve', 'news'),
+  newsController.approveNews
+);
+
+router.patch(
+ '/:id/reject',
+  authenticate,
+  requireAdminAccess,
+  validate([...newsIdValidator, ...contentRejectionValidator]),
+  logActivity('reject', 'news'),
+  newsController.rejectNews
+);
+
 router.patch(
  '/:id/publish',
   authenticate,

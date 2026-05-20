@@ -61,6 +61,19 @@ const contentSectionSchema = new Schema(
   { _id: false }
 );
 
+const approvalSummarySchema = new Schema(
+  {
+    submittedAt: Date,
+    submittedBy: String,
+    approvedAt: Date,
+    approvedBy: String,
+    rejectedAt: Date,
+    rejectedBy: String,
+    rejectionReason: String,
+  },
+  { _id: false }
+);
+
 const newsSchema = new Schema<INews>(
   {
     title: {
@@ -109,6 +122,14 @@ const newsSchema = new Schema<INews>(
     },
     archivedAt: {
       type: Date,
+    },
+    approvalSummary: {
+      type: approvalSummarySchema,
+      default: undefined,
+    },
+    processInstanceId: {
+      type: String,
+      default: null,
     },
     tags: {
       type: [String],

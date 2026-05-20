@@ -20,6 +20,14 @@ import {
 } from '../utils/organizationScope';
 import { attachOrganizationName, attachOrganizationNames } from '../utils/ownedContent';
 import { hasGlobalPermission } from '../utils/rbac';
+import {
+  buildApprovedApprovalSummary,
+  buildRejectedApprovalSummary,
+  buildSubmittedApprovalSummary,
+  ensureFullAdminApprover,
+  recordContentApprovalAction,
+  shouldResetApprovalOnEdit,
+} from '../utils/contentApproval';
 
 const NEWS_EDITABLE_FIELDS = [
   'title',
@@ -351,6 +359,11 @@ export const updateNews = async (req: AuthRequest, res: Response): Promise<void>
     (updates as Record<string, unknown>).ownerType = nextOwnership.ownerType;
     (updates as Record<string, unknown>).organizationId = nextOwnership.organizationId;
 
+    if (shouldResetApprovalOnEdit(existingNews.status)) {
+      (updates as Record<string, unknown>).status = NewsStatus.DRAFT;
+      (updates as Record<string, unknown>).approvalSummary = undefined;
+    }
+
     const news = await News.findByIdAndUpdate(
       id,
       { $set: updates },
@@ -371,6 +384,122 @@ export const updateNews = async (req: AuthRequest, res: Response): Promise<void>
   } catch (error) {
     throw error;
   }
+};
+
+export const submitNewsForApproval = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const news = await News.findById(id).populate('author', 'firstName lastName email');
+
+  if (!news) {
+    throw new AppError('News article not found', 404);
+  }
+
+  if (news.status !== NewsStatus.DRAFT) {
+    throw new AppError('Only draft news can be submitted for approval', 400);
+  }
+
+  await ensureCanManageOwnedContent(
+    req.user,
+    Permission.SUBMIT_CONTENT_FOR_APPROVAL,
+    news.ownerType,
+    news.organizationId ?? null
+  );
+
+  const fromStatus = news.status;
+  news.status = NewsStatus.PENDING_APPROVAL;
+  news.approvalSummary = buildSubmittedApprovalSummary(req.user!.userId, news.approvalSummary);
+  await news.save();
+  await recordContentApprovalAction({
+    contentType: 'news',
+    contentId: String(news._id),
+    actorUserId: req.user!.userId,
+    action: 'submitted',
+    fromStatus,
+    toStatus: news.status,
+    comment: typeof req.body.comment === 'string' ? req.body.comment.trim() : undefined,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'News article submitted for approval',
+    data: { news },
+  });
+};
+
+export const approveNews = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const news = await News.findById(id).populate('author', 'firstName lastName email');
+
+  if (!news) {
+    throw new AppError('News article not found', 404);
+  }
+
+  ensureFullAdminApprover(req.user);
+
+  if (news.status !== NewsStatus.PENDING_APPROVAL) {
+    throw new AppError('Only pending approval news can be approved', 400);
+  }
+
+  const fromStatus = news.status;
+  news.status = NewsStatus.APPROVED;
+  news.approvalSummary = buildApprovedApprovalSummary(req.user!.userId, news.approvalSummary);
+  await news.save();
+  await recordContentApprovalAction({
+    contentType: 'news',
+    contentId: String(news._id),
+    actorUserId: req.user!.userId,
+    action: 'approved',
+    fromStatus,
+    toStatus: news.status,
+    comment: typeof req.body.comment === 'string' ? req.body.comment.trim() : undefined,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'News article approved successfully',
+    data: { news },
+  });
+};
+
+export const rejectNews = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const reason = typeof req.body.reason === 'string' ? req.body.reason.trim() : '';
+  const news = await News.findById(id).populate('author', 'firstName lastName email');
+
+  if (!news) {
+    throw new AppError('News article not found', 404);
+  }
+
+  ensureFullAdminApprover(req.user);
+
+  if (news.status !== NewsStatus.PENDING_APPROVAL) {
+    throw new AppError('Only pending approval news can be rejected', 400);
+  }
+
+  if (!reason) {
+    throw new AppError('Rejection reason is required', 400);
+  }
+
+  const fromStatus = news.status;
+  news.status = NewsStatus.REJECTED;
+  news.approvalSummary = buildRejectedApprovalSummary(req.user!.userId, reason, news.approvalSummary);
+  await news.save();
+  await recordContentApprovalAction({
+    contentType: 'news',
+    contentId: String(news._id),
+    actorUserId: req.user!.userId,
+    action: 'rejected',
+    fromStatus,
+    toStatus: news.status,
+    reason,
+    comment: typeof req.body.comment === 'string' ? req.body.comment.trim() : undefined,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'News article rejected successfully',
+    data: { news },
+  });
 };
 
 /**
@@ -425,8 +554,8 @@ export const publishNews = async (req: AuthRequest, res: Response): Promise<void
       throw new AppError('News article not found', 404);
     }
 
-    if (news.status !== NewsStatus.DRAFT) {
-      throw new AppError('Only draft news can be published', 400);
+    if (news.status !== NewsStatus.APPROVED) {
+      throw new AppError('Only approved news can be published', 400);
     }
 
     await ensureCanManageOwnedContent(
@@ -436,10 +565,19 @@ export const publishNews = async (req: AuthRequest, res: Response): Promise<void
       news.organizationId ?? null
     );
 
+    const fromStatus = news.status;
     news.status = NewsStatus.PUBLISHED;
     news.publishedAt = new Date();
     news.archivedAt = undefined;
     await news.save();
+    await recordContentApprovalAction({
+      contentType: 'news',
+      contentId: String(news._id),
+      actorUserId: req.user!.userId,
+      action: 'published',
+      fromStatus,
+      toStatus: news.status,
+    });
 
     logger.info(`News published: ${id} by user ${req.user?.userId}`);
 
@@ -476,9 +614,18 @@ export const archiveNews = async (req: AuthRequest, res: Response): Promise<void
       news.organizationId ?? null
     );
 
+    const fromStatus = news.status;
     news.status = NewsStatus.ARCHIVED;
     news.archivedAt = new Date();
     await news.save();
+    await recordContentApprovalAction({
+      contentType: 'news',
+      contentId: String(news._id),
+      actorUserId: req.user!.userId,
+      action: 'archived',
+      fromStatus,
+      toStatus: news.status,
+    });
 
     logger.info(`News archived: ${id} by user ${req.user?.userId}`);
 

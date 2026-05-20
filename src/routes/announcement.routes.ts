@@ -10,6 +10,10 @@ import {
   createAnnouncementValidator,
   updateAnnouncementValidator,
 } from '../validators/announcement.validator';
+import {
+  contentApprovalCommentValidator,
+  contentRejectionValidator,
+} from '../validators/approval.validator';
 
 const router: Router = Router();
 
@@ -89,6 +93,33 @@ router.delete(
  * @desc    Publish announcement
  * @access  Private (requires PUBLISH_ANNOUNCEMENT permission)
  */
+router.patch(
+  '/:id/submit',
+  authenticate,
+  requireAdminAccess,
+  validate([...announcementIdValidator, ...contentApprovalCommentValidator]),
+  logActivity('submit_for_approval', 'announcement'),
+  announcementController.submitAnnouncementForApproval
+);
+
+router.patch(
+  '/:id/approve',
+  authenticate,
+  requireAdminAccess,
+  validate([...announcementIdValidator, ...contentApprovalCommentValidator]),
+  logActivity('approve', 'announcement'),
+  announcementController.approveAnnouncement
+);
+
+router.patch(
+  '/:id/reject',
+  authenticate,
+  requireAdminAccess,
+  validate([...announcementIdValidator, ...contentRejectionValidator]),
+  logActivity('reject', 'announcement'),
+  announcementController.rejectAnnouncement
+);
+
 router.patch(
   '/:id/publish',
   authenticate,

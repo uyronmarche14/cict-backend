@@ -118,12 +118,15 @@ export const getSystemRoleCatalog = (): SystemRoleDefinition[] => SYSTEM_ROLE_DE
 
 export const ADMIN_ENTRY_PERMISSIONS: Permission[] = [
   Permission.VIEW_USERS,
+  Permission.VIEW_STUDENT,
+  Permission.VIEW_ACADEMIC_GROUPS,
   Permission.VIEW_ROLE,
   Permission.VIEW_ORGANIZATION,
   Permission.VIEW_MEMBER,
   Permission.VIEW_NEWS,
   Permission.VIEW_ANNOUNCEMENT,
   Permission.VIEW_EVENT,
+  Permission.VIEW_PROCESS,
   Permission.MANAGE_SETTINGS,
 ];
 
@@ -147,6 +150,14 @@ const ADMIN_MODULE_PERMISSION_MAP: Record<Exclude<AdminModule, 'dashboard'>, Per
     Permission.EDIT_USER,
     Permission.DELETE_USER,
     Permission.SET_USER_STATUS,
+  ],
+  students: [
+    Permission.VIEW_STUDENT,
+    Permission.CREATE_STUDENT,
+    Permission.EDIT_STUDENT,
+    Permission.SET_STUDENT_STATUS,
+    Permission.VIEW_ACADEMIC_GROUPS,
+    Permission.MANAGE_ACADEMIC_GROUPS,
   ],
   events: [
     Permission.VIEW_EVENT,
@@ -181,6 +192,14 @@ const ADMIN_MODULE_PERMISSION_MAP: Record<Exclude<AdminModule, 'dashboard'>, Per
     Permission.ASSIGN_ROLE,
   ],
   faq: [Permission.MANAGE_SETTINGS],
+  logs: [Permission.VIEW_LOGS],
+  processes: [
+    Permission.VIEW_PROCESS,
+    Permission.CREATE_PROCESS,
+    Permission.EDIT_PROCESS,
+    Permission.COMMENT_PROCESS,
+    Permission.APPROVE_PROCESS_STEP,
+  ],
 };
 
 type ScopedAdminModule = Extract<

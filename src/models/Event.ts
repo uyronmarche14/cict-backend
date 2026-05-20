@@ -84,6 +84,19 @@ const scheduleItemSchema = new Schema(
   { _id: false }
 );
 
+const approvalSummarySchema = new Schema(
+  {
+    submittedAt: Date,
+    submittedBy: String,
+    approvedAt: Date,
+    approvedBy: String,
+    rejectedAt: Date,
+    rejectedBy: String,
+    rejectionReason: String,
+  },
+  { _id: false }
+);
+
 const eventSchema = new Schema<IEvent>(
   {
     title: {
@@ -185,7 +198,44 @@ const eventSchema = new Schema<IEvent>(
     isRegistrationOpen: {
       type: Boolean,
       default: true,
-    }
+    },
+    registeredCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    checkedInCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    registrationCloseAt: {
+      type: Date,
+    },
+    allowWalkIns: {
+      type: Boolean,
+      default: false,
+    },
+    targetProgramIds: {
+      type: [String],
+      default: [],
+    },
+    targetYearLevelIds: {
+      type: [String],
+      default: [],
+    },
+    targetSectionIds: {
+      type: [String],
+      default: [],
+    },
+    approvalSummary: {
+      type: approvalSummarySchema,
+      default: undefined,
+    },
+    processInstanceId: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,

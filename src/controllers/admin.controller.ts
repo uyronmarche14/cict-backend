@@ -4,6 +4,7 @@ import Event from '../models/Event';
 import News from '../models/News';
 import Organization from '../models/Organization';
 import Role from '../models/Role';
+import Student from '../models/Student';
 import User from '../models/User';
 import { AuthRequest } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
@@ -13,6 +14,7 @@ import { hasGlobalPermission } from '../utils/rbac';
 
 type DashboardCardKey =
   | 'users'
+  | 'students'
   | 'news'
   | 'announcements'
   | 'roles'
@@ -51,6 +53,9 @@ export const getDashboardSummary = async (
 
   if (hasGlobalPermission(currentUser, Permission.VIEW_USERS)) {
     countTasks.users = User.countDocuments();
+  }
+  if (hasGlobalPermission(currentUser, Permission.VIEW_STUDENT)) {
+    countTasks.students = Student.countDocuments();
   }
   if (hasGlobalPermission(currentUser, Permission.VIEW_NEWS)) {
     countTasks.news = News.countDocuments();
@@ -101,6 +106,7 @@ export const getDashboardSummary = async (
 
   const cards = {
     users: 0,
+    students: 0,
     news: 0,
     announcements: 0,
     roles: 0,
