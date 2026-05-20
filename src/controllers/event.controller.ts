@@ -723,12 +723,23 @@ export const completeEvent = async (req: AuthRequest, res: Response): Promise<vo
 };
 
 /**
- * Join/leave are intentionally out of MVP scope for public users.
+ * Join/leave are deprecated. Use the student registration flow instead.
+ * These routes remain for backward compatibility and return a helpful redirect.
  */
-export const joinEvent = async (_req: AuthRequest, _res: Response): Promise<void> => {
-  throw new AppError('Event registration is not available in this MVP', 410);
+export const joinEvent = async (_req: AuthRequest, res: Response): Promise<void> => {
+  res.status(200).json({
+    success: true,
+    message:
+      'Public join is deprecated. Students should use POST /api/student/events/:id/register instead.',
+    data: { redirect: '/student/login' },
+  });
 };
 
-export const leaveEvent = async (_req: AuthRequest, _res: Response): Promise<void> => {
-  throw new AppError('Event registration is not available in this MVP', 410);
+export const leaveEvent = async (_req: AuthRequest, res: Response): Promise<void> => {
+  res.status(200).json({
+    success: true,
+    message:
+      'Public leave is deprecated. Students should use POST /api/student/events/:id/cancel-registration instead.',
+    data: { redirect: '/student/login' },
+  });
 };

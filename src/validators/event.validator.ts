@@ -250,3 +250,12 @@ export const eventIdValidator = [
     .isMongoId()
     .withMessage('Invalid event ID'),
 ];
+
+export const eventRegIdValidator = [
+  param('id')
+    .isMongoId()
+    .withMessage('Invalid event ID'),
+  param('regId')
+    .isMongoId()
+    .withMessage('Invalid registration ID'),
+];
