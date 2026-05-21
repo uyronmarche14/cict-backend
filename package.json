@@ -17,7 +17,7 @@
     "test": "TMPDIR=/tmp vitest run",
     "test:run": "vitest run",
     "test:watch": "vitest",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "keywords": [],
   "author": "",
