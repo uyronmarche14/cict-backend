@@ -57,7 +57,7 @@ export const logActivity = (action: string, resource: string) => {
  * Sanitize request body to remove sensitive information
  */
 const sanitizeBody = (body: any): any => {
-  if (!body) return body;
+  if (!body) {return body;}
   
   const sanitized = { ...body };
   const sensitiveFields = ['password', 'token', 'secret', 'apiKey'];

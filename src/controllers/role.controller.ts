@@ -196,9 +196,9 @@ export const updateRole = async (req: AuthRequest, res: Response): Promise<void>
     ensureRolePermissionsWithinActorScope(req.user?.permissions ?? [], requestedPermissions);
     
     const updates: any = {};
-    if (name) updates.name = name;
-    if (description) updates.description = description;
-    if (permissions) updates.permissions = requestedPermissions;
+    if (name) {updates.name = name;}
+    if (description) {updates.description = description;}
+    if (permissions) {updates.permissions = requestedPermissions;}
     
     const updatedRole = await Role.findByIdAndUpdate(
       id,

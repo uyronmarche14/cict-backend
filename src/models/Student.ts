@@ -95,7 +95,7 @@ studentSchema.methods.comparePassword = async function (
 ): Promise<boolean> {
   try {
     return await bcrypt.compare(candidatePassword, this.passwordHash);
-  } catch (_error) {
+  } catch {
     return false;
   }
 };

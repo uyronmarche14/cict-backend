@@ -469,7 +469,7 @@ export const scanEventAttendance = async (
       if (student.qrVersion !== decoded.qrVersion) {
         throw new Error('QR version mismatch');
       }
-    } catch (_error) {
+    } catch {
       await EventAttendanceLog.create({
         eventId: event._id,
         scanType: 'entry',
@@ -511,7 +511,7 @@ export const scanEventAttendance = async (
     if (!registration && event.allowWalkIns) {
       try {
         ensureEventOpenForRegistration(event);
-      } catch (_error) {
+      } catch {
         res.status(200).json({
           success: true,
           data: { result: AttendanceScanResult.REGISTRATION_CLOSED },
@@ -698,8 +698,21 @@ export const adminCancelRegistration = async (
   registration.cancelledAt = new Date();
   await registration.save();
 
-  if (!wasCheckedIn && event.registeredCount && event.registeredCount > 0) {
-    await Event.findByIdAndUpdate(eventId, { $inc: { registeredCount: -1 } });
+  if (!wasCheckedIn) {
+    await Event.findOneAndUpdate(
+      { _id: eventId, registeredCount: { $gt: 0 } },
+      { $inc: { registeredCount: -1 } }
+    );
+  } else {
+    // Also decrement registeredCount when cancelling a checked-in registration
+    await Event.findOneAndUpdate(
+      { _id: eventId, registeredCount: { $gt: 0 } },
+      { $inc: { registeredCount: -1 } }
+    );
+    await Event.findOneAndUpdate(
+      { _id: eventId, checkedInCount: { $gt: 0 } },
+      { $inc: { checkedInCount: -1 } }
+    );
   }
 
   await logAdminAttendanceActivity({
@@ -752,10 +765,27 @@ export const adminUpdateRegistrationStatus = async (
   const prevStatus = registration.status;
   registration.status = status as EventRegistrationStatus;
 
+  // Transitioning away from CHECKED_IN — decrement checkedInCount
+  if (prevStatus === EventRegistrationStatus.CHECKED_IN && status !== EventRegistrationStatus.CHECKED_IN) {
+    await Event.findOneAndUpdate(
+      { _id: eventId, checkedInCount: { $gt: 0 } },
+      { $inc: { checkedInCount: -1 } }
+    );
+  }
+
   if (status === EventRegistrationStatus.CANCELLED && !registration.cancelledAt) {
     registration.cancelledAt = new Date();
-    if (prevStatus !== EventRegistrationStatus.CHECKED_IN && event.registeredCount && event.registeredCount > 0) {
-      await Event.findByIdAndUpdate(eventId, { $inc: { registeredCount: -1 } });
+    if (prevStatus !== EventRegistrationStatus.CHECKED_IN) {
+      await Event.findOneAndUpdate(
+        { _id: eventId, registeredCount: { $gt: 0 } },
+        { $inc: { registeredCount: -1 } }
+      );
+    } else {
+      // Also decrement registeredCount when cancelling a checked-in registration
+      await Event.findOneAndUpdate(
+        { _id: eventId, registeredCount: { $gt: 0 } },
+        { $inc: { registeredCount: -1 } }
+      );
     }
   }
 
@@ -906,9 +936,10 @@ export const adminUndoCheckIn = async (
   registration.scanCount = Math.max(0, (registration.scanCount || 1) - 1);
   await registration.save();
 
-  if (event.checkedInCount && event.checkedInCount > 0) {
-    await Event.findByIdAndUpdate(eventId, { $inc: { checkedInCount: -1 } });
-  }
+  await Event.findOneAndUpdate(
+    { _id: eventId, checkedInCount: { $gt: 0 } },
+    { $inc: { checkedInCount: -1 } }
+  );
 
   await logAdminAttendanceActivity({
     adminUserId: req.user!.userId,

@@ -88,7 +88,7 @@ export const handleImageUpload = async (req: Request, res: Response, next: NextF
  */
 export const deleteFromCloudinary = async (publicId: string): Promise<void> => {
   try {
-    if (!publicId) return;
+    if (!publicId) {return;}
     await cloudinary.uploader.destroy(publicId);
   } catch (error) {
     logger.error(`Failed to delete image ${publicId} from Cloudinary:`, error);

@@ -181,7 +181,7 @@ export const logoutStudent = async (req: Request, res: Response): Promise<void> 
           $set: { revokedAt: new Date() },
         });
       }
-    } catch (_error) {
+    } catch {
       // Best-effort revoke only.
     }
   }

@@ -88,7 +88,7 @@ export const authenticate = async (
 
     try {
       req.user = await buildAuthenticatedUser(user);
-    } catch (roleError) {
+    } catch {
       res.status(403).json({
         success: false,
         message: 'Your assigned role is no longer valid',
@@ -149,11 +149,11 @@ export const optionalAuthenticate = async (
           if (user?.isActive) {
             try {
               req.user = await buildAuthenticatedUser(user);
-            } catch (_roleError) {
+            } catch {
               req.user = undefined;
             }
           }
-        } catch (err) {
+        } catch {
           // Token invalid or expired, proceed as unauthenticated
         }
       }

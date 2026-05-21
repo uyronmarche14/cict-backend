@@ -6,7 +6,6 @@ const activityLogSchema = new Schema<IActivityLog>(
     user: {
       type: String,
       ref: 'User',
-      required: true,
     },
     action: {
       type: String,
